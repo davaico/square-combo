@@ -1,12 +1,13 @@
-# Square-Combo Integration
+Square-Combo Integration
+========================
 
-A cloud-hosted service that automatically syncs daily revenue data from Square POS systems to Combo at the end of each day.
+An integration automatically syncs revenue data from Square to Combo at the end of each day.
 
 ## Overview
 
 This integration service:
 - Extracts daily revenue data via Square API
-- Pushes revenue data to Combo API 
+- Pushes revenue data to Combo API
 - Runs automatically once daily via cron jobs
 - Supports multiple clients and locations
 - Provides comprehensive logging and error handling
@@ -17,26 +18,26 @@ This integration service:
 square-combo/
 ├── main.py                 # FastAPI application entry point
 ├── requirements.txt        # Python dependencies
-├── .env.example           # Environment variables template
+├── .env.example            # Environment variables template
 ├── database/
-│   ├── models.py          # SQLAlchemy database models
-│   └── database.py        # Database connection setup
+│   ├── models.py           # SQLAlchemy database models
+│   └── database.py         # Database connection setup
 ├── adapters/
 │   ├── square/
-│   │   └── client.py      # Square API client
+│   │   └── client.py       # Square API client
 │   └── combo/
-│       └── client.py      # Combo API client
+│       └── client.py       # Combo API client
 ├── routes/
-│   ├── auth.py           # OAuth and authentication routes
-│   └── admin.py          # Client management routes
+│   ├── auth.py             # OAuth and authentication routes
+│   └── admin.py            # Client management routes
 ├── tasks/
-│   └── sync_revenue.py   # Daily sync task (cron job)
+│   └── sync_revenue.py     # Daily sync task (cron job)
 ├── services/
-│   ├── client_service.py # Client CRUD operations
-│   └── sync_service.py   # Revenue sync business logic
+│   ├── client_service.py   # Client CRUD operations
+│   └── sync_service.py     # Revenue sync business logic
 └── utils/
-    ├── config.py         # Application configuration
-    └── logging.py        # Logging setup
+    ├── config.py           # Application configuration
+    └── logging.py          # Logging setup
 ```
 
 ## Setup Instructions
@@ -102,11 +103,11 @@ python tasks/sync_revenue.py
 - `GET /health` - Service health status
 - `GET /` - Root endpoint with service info
 
-### Authentication (Planned)
+### Authentication (Placeholders)
 - `GET /auth/oauth/square` - Square OAuth callback
 - `POST /auth/clients` - Create new client
 
-### Admin (Planned)
+### Admin (Placeholders)
 - `GET /admin/clients` - List all clients
 - `GET /admin/clients/{id}/sync-status` - Get sync status
 - `POST /admin/clients/{id}/sync` - Trigger manual sync
@@ -151,12 +152,11 @@ Environment variables in `.env`:
    ```bash
    # Update system
    sudo apt update && sudo apt upgrade -y
-   
+
    # Install Python 3.9+
    sudo apt install python3 python3-pip python3-venv -y
-   
-   # Clone repository
-   git clone <repository-url>
+
+   # rsync directory to the VM
    cd square-combo
    ```
 
@@ -165,14 +165,14 @@ Environment variables in `.env`:
    # Create virtual environment
    python3 -m venv .venv
    source .venv/bin/activate
-   
+
    # Install dependencies
    pip install -r requirements.txt
-   
+
    # Configure environment
    cp env.example .env
    # Edit .env with production values
-   
+
    # Initialize database
    python -c "from database.database import init_db; init_db()"
    ```
@@ -181,7 +181,7 @@ Environment variables in `.env`:
    ```bash
    # Create service file
    sudo nano /etc/systemd/system/square-combo.service
-   
+
    # Enable and start service
    sudo systemctl enable square-combo
    sudo systemctl start square-combo
@@ -192,6 +192,8 @@ Environment variables in `.env`:
    # Install and configure Nginx
    sudo apt install nginx -y
    # Configure proxy to FastAPI app
+
+   # Run certbot
    ```
 
 ## Logging
@@ -202,32 +204,6 @@ Logs are written to:
 - Console output for development
 
 Log rotation is configured with 10MB max file size and 5-10 backup files.
-
-## Development Status
-
-### ✅ Completed
-- Project structure setup
-- Database models design
-- FastAPI application skeleton
-- Configuration management
-- Logging setup
-- Basic health check endpoint
-
-### 🚧 In Progress
-- API adapter implementations
-- Service layer business logic
-- Authentication routes
-- Admin management routes
-
-### 📋 TODO
-- Square API integration
-- Combo API integration  
-- OAuth flow implementation
-- Cron job setup
-- Error handling and retry logic
-- Client onboarding flow
-- Comprehensive testing
-- Production deployment scripts
 
 ## Testing
 
@@ -241,10 +217,6 @@ curl http://localhost:8000/health
 # Test root endpoint
 curl http://localhost:8000/
 ```
-
-## Support
-
-For issues and questions, please refer to the project documentation or contact the development team.
 
 ## License
 

@@ -14,8 +14,8 @@ setup_logging()
 
 app = FastAPI(
     title="Square-Combo Integration",
-    description="Daily revenue sync between Square POS and Combo",
-    version="1.0.0"
+    description="Daily revenue sync between Square and Combo",
+    version="0.0.1"
 )
 
 # Add CORS middleware
@@ -35,13 +35,13 @@ app.include_router(admin_router, prefix="/admin", tags=["admin"])
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "square-combo-integration"}
+    return {"status": "healthy"}
 
 
 @app.get("/")
 async def root():
     """Root endpoint."""
-    return {"message": "Square-Combo Integration API", "version": "1.0.0"}
+    return {"message": "Square-Combo Integration", "version": "0.0.1"}
 
 
 if __name__ == "__main__":

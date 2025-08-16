@@ -84,5 +84,5 @@ def setup_logging():
             },
         },
     }
-    
+
     logging.config.dictConfig(logging_config)
