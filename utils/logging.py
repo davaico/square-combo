@@ -1,6 +1,7 @@
 """
 Logging configuration for the application.
 """
+
 import logging
 import logging.config
 from pathlib import Path
@@ -10,11 +11,11 @@ from .config import settings
 
 def setup_logging():
     """Configure logging for the application."""
-    
+
     # Create logs directory if it doesn't exist
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
-    
+
     logging_config = {
         "version": 1,
         "disable_existing_loggers": False,

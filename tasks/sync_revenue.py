@@ -2,6 +2,7 @@
 Daily revenue synchronization task.
 This module contains the main logic for syncing revenue data from Square to Combo.
 """
+
 import asyncio
 import logging
 from datetime import datetime, date, timedelta
@@ -20,24 +21,24 @@ async def sync_daily_revenue():
     This function is called by the cron job.
     """
     logger.info("Starting daily revenue sync process")
-    
+
     db = SessionLocal()
     try:
         sync_service = SyncService(db)
-        
+
         # Calculate target date (previous day by default)
         target_date = date.today() - timedelta(days=settings.SYNC_DAYS_BACK)
-        
+
         # Get all active clients
         # TODO: Implement client retrieval and sync logic
         logger.info(f"Syncing revenue data for date: {target_date}")
-        
+
         # For each client:
         # 1. Fetch locations from Square
         # 2. For each location, fetch revenue data
         # 3. Map to Combo format and post to Combo API
         # 4. Log results
-        
+
     except Exception as e:
         logger.error(f"Error during daily revenue sync: {e}")
         raise

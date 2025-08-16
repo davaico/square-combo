@@ -1,6 +1,7 @@
 """
 Authentication routes for OAuth and API key management.
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -12,13 +13,11 @@ router = APIRouter()
 
 @router.get("/oauth/square")
 async def square_oauth_callback(
-    code: str = None,
-    state: str = None,
-    db: Session = Depends(get_db)
+    code: str = None, state: str = None, db: Session = Depends(get_db)
 ):
     """
     Handle Square OAuth callback.
-    
+
     Args:
         code: Authorization code from Square
         state: State parameter for CSRF protection
@@ -31,11 +30,11 @@ async def square_oauth_callback(
 @router.post("/clients")
 async def create_client(
     client_data: dict,  # TODO: Create proper Pydantic model
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Create a new client with API credentials.
-    
+
     Args:
         client_data: Client information and API keys
         db: Database session
