@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 from adapters.combo.client import ComboClient
 
 
+@pytest.mark.asyncio
 class TestComboClientGetLocations:
     """Test cases for ComboClient.get_locations() method."""
 

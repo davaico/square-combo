@@ -3,6 +3,7 @@ Pytest configuration and shared fixtures.
 """
 
 import pytest
+import pytest_asyncio
 import os
 from typing import Dict, Any, List
 from adapters.combo.client import ComboClient
@@ -27,12 +28,14 @@ def test_settings():
 # Combo client fixtures
 # ---------------------
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def combo_client(test_settings):
     """Create a ComboClient instance for testing."""
     client = ComboClient(api_key=test_settings.COMBO_API_KEY)
-    yield client
-    await client.close()
+    try:
+        yield client
+    finally:
+        await client.close()
 
 
 @pytest.fixture

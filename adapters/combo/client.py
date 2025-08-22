@@ -18,6 +18,7 @@ class ComboClient:
         self.api_key = api_key
         self.base_url = settings.COMBO_BASE_URL
         self.client = httpx.AsyncClient(
+            base_url=self.base_url,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
