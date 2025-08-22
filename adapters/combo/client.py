@@ -3,8 +3,7 @@ Combo API client adapter.
 """
 
 import logging
-from datetime import date
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import httpx
 
 from utils.config import settings
@@ -20,7 +19,7 @@ class ComboClient:
         self.base_url = settings.COMBO_BASE_URL
         self.client = httpx.AsyncClient(
             headers={
-                "Authorization": f"Bearer {self.api_key}",  # Adjust auth method as needed
+                "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
             }
         )
@@ -30,11 +29,33 @@ class ComboClient:
         Fetch all locations from Combo API.
 
         Returns:
-            List of location dictionaries
+            List of location dictionaries containing:
+            - id: String, the partner id
+            - name: String, the location's name
+            - account_id: String, the account's partner id
+            - partner_id: String, the partner id
+            - snapshift_account_id: Integer, the account's id
+            - snapshift_location_id: Integer, the location's id
+            - teams: Array[team], list of teams (empty if single team)
+
+        Raises:
+            httpx.HTTPStatusError: If API returns error status code
+            httpx.ConnectError: If network connection fails
         """
-        # TODO: Implement Combo locations API call
         logger.info("Fetching locations from Combo API")
-        pass
+
+        try:
+            response = await self.client.get("/api/v1/locations")
+            response.raise_for_status()
+
+            locations = response.json()
+            logger.info(f"Successfully fetched {len(locations)} locations")
+
+            return locations
+
+        except Exception as e:
+            logger.error(f"Failed to fetch locations: {str(e)}")
+            raise
 
     async def post_revenue(
         self, location_id: str, revenue_data: Dict[str, Any]

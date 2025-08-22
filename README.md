@@ -83,6 +83,12 @@ python main.py
 
 # Or with uvicorn directly
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Call health endpoint
+curl http://localhost:8000/health
+
+# Call root endpoint
+curl http://localhost:8000/
 ```
 
 ### 5. Setting up Cron Job
@@ -208,14 +214,14 @@ Log rotation is configured with 10MB max file size and 5-10 backup files.
 ## Testing
 
 ```bash
-# Run the application
-python main.py
+# All tests
+python run_tests.py
 
-# Test health endpoint
-curl http://localhost:8000/health
+# Unit tests only (fast, mocked)
+python run_tests.py --unit
 
-# Test root endpoint
-curl http://localhost:8000/
+# Integration tests only (real API calls)
+python run_tests.py --integration
 ```
 
 ## License
