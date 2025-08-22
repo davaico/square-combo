@@ -6,7 +6,11 @@ import pytest
 import os
 from typing import Dict, Any, List
 from adapters.combo.client import ComboClient
+from dotenv import load_dotenv
 from utils.config import Settings
+
+
+load_dotenv()
 
 
 @pytest.fixture

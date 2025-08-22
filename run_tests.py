@@ -24,11 +24,11 @@ def main():
     args = sys.argv[1:]
 
     if "--unit" in args:
-        cmd = ["python", "-m", "pytest", "tests/unit/", "-v"]
+        cmd = ["python", "-m", "pytest", "tests/unit/", "-v", "-s"]
     elif "--integration" in args:
-        cmd = ["python", "-m", "pytest", "tests/integration/", "-v"]
+        cmd = ["python", "-m", "pytest", "tests/integration/", "-v", "-s"]
     else:
-        cmd = ["python", "-m", "pytest", "tests/", "-v"]
+        cmd = ["python", "-m", "pytest", "tests/", "-v", "-s"]
 
     # Add any additional pytest arguments
     extra_args = [arg for arg in args if not arg.startswith("--")]
