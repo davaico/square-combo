@@ -64,8 +64,7 @@ class TestComboClientIntegration:
                     assert isinstance(team["name"], str)
 
                 print(f"Successfully fetched {len(result)} locations from Combo API")
-                for loc in result:
-                    print(f"  - {loc['name']} (ID: {loc['id']}) - Teams: {len(loc['teams'])}")
+                print(f"Result: \n {result}")
             else:
                 print("API call successful - No locations returned (empty account)")
 

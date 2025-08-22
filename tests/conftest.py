@@ -5,13 +5,22 @@ Pytest configuration and shared fixtures.
 import pytest
 import pytest_asyncio
 import os
+import logging
 from typing import Dict, Any, List
 from adapters.combo.client import ComboClient
 from dotenv import load_dotenv
 from utils.config import Settings
 
 
+# Load environment variables
 load_dotenv()
+
+# Configure logging for tests
+logging.basicConfig(
+    # level=logging.DEBUG,
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 
 @pytest.fixture
