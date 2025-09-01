@@ -33,10 +33,14 @@ class TestSquareClientIntegration:
             # Test with yesterday's date to ensure there might be some data
             target_date = date.today() - timedelta(days=1)
 
-            # Make real API call - use a test location ID or get from locations API
+            # First, get available locations
+            locations = await square_client.get_locations()
+            assert locations, "No locations found for this Square account."
+            location_id = locations[0]["id"]
+
+            # Make real API call with a valid location ID
             result = await square_client.search_orders_by_date(
-                # TODO: support multiple locations
-                location_ids=["MAIN"],  # Common default location ID
+                location_ids=[location_id],
                 target_date=target_date
             )
 
@@ -85,8 +89,13 @@ class TestSquareClientIntegration:
             # Test with yesterday's date
             target_date = date.today() - timedelta(days=1)
 
+            # First, get available locations
+            locations = await square_client.get_locations()
+            assert locations, "No locations found for this Square account."
+            location_id = locations[0]["id"]
+
             # Make real API call
-            result = await square_client.get_daily_revenue("MAIN", target_date)
+            result = await square_client.get_daily_revenue(location_id, target_date)
 
             # Basic assertions about response structure
             assert result is not None
@@ -113,7 +122,7 @@ class TestSquareClientIntegration:
 
             # Validate date format
             assert result["date"] == target_date.strftime("%Y-%m-%d")
-            assert result["location_id"] == "MAIN"
+            assert result["location_id"] == location_id
 
             # Print results
             currency = result["currency"]
@@ -138,9 +147,14 @@ class TestSquareClientIntegration:
             # Test with a specific date
             target_date = date(2025, 8, 22)  # Fixed date for testing
 
+            # First, get available locations
+            locations = await square_client.get_locations()
+            assert locations, "No locations found for this Square account."
+            location_id = locations[0]["id"]
+
             # Make API call - this should convert to French timezone properly
             result = await square_client.search_orders_by_date(
-                location_ids=["MAIN"],
+                location_ids=[location_id],
                 target_date=target_date
             )
 
@@ -163,8 +177,13 @@ class TestSquareClientIntegration:
         target_date = date.today() - timedelta(days=1)
 
         start_time = time.time()
+        # First, get available locations
+        locations = await square_client.get_locations()
+        assert locations, "No locations found for this Square account."
+        location_id = locations[0]["id"]
+
         await square_client.search_orders_by_date(
-            location_ids=["MAIN"],
+            location_ids=[location_id],
             target_date=target_date
         )
         end_time = time.time()
