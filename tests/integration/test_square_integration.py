@@ -24,8 +24,12 @@ class TestSquareClientIntegration:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Skip integration tests if no API credentials are provided."""
-        if not os.getenv("SQUARE_ACCESS_TOKEN") or not os.getenv("SQUARE_APPLICATION_ID"):
-            pytest.skip("SQUARE_ACCESS_TOKEN and SQUARE_APPLICATION_ID environment variables not set")
+        if not os.getenv("SQUARE_ACCESS_TOKEN") or not os.getenv(
+            "SQUARE_APPLICATION_ID"
+        ):
+            pytest.skip(
+                "SQUARE_ACCESS_TOKEN and SQUARE_APPLICATION_ID environment variables not set"
+            )
 
     async def test_search_orders_real_api_call(self, square_client: SquareClient):
         """Test search_orders_by_date with real API call."""
@@ -40,8 +44,7 @@ class TestSquareClientIntegration:
 
             # Make real API call with a valid location ID
             result = await square_client.search_orders_by_date(
-                location_ids=[location_id],
-                target_date=target_date
+                location_ids=[location_id], target_date=target_date
             )
 
             # Basic assertions about response structure
@@ -52,9 +55,7 @@ class TestSquareClientIntegration:
                 order = result[0]
 
                 # Check required fields exist
-                required_fields = [
-                    "id", "location_id", "state", "created_at"
-                ]
+                required_fields = ["id", "location_id", "state", "created_at"]
                 for field in required_fields:
                     assert field in order, f"Missing required field: {field}"
 
@@ -76,7 +77,9 @@ class TestSquareClientIntegration:
                 for ord in result[:3]:  # Show first 3 orders
                     total = ord.get("total_money", {}).get("amount", 0)
                     currency = ord.get("total_money", {}).get("currency", "USD")
-                    print(f"  - Order {ord['id']}: {total/100:.2f} {currency} ({ord['state']})")
+                    print(
+                        f"  - Order {ord['id']}: {total/100:.2f} {currency} ({ord['state']})"
+                    )
             else:
                 print("API call successful - No orders returned for the date")
 
@@ -103,8 +106,15 @@ class TestSquareClientIntegration:
 
             # Check required fields
             required_fields = [
-                "location_id", "date", "gross_sales_amount", "total_discounts",
-                "total_refunds", "net_sales_amount", "order_count", "refund_count", "currency"
+                "location_id",
+                "date",
+                "gross_sales_amount",
+                "total_discounts",
+                "total_refunds",
+                "net_sales_amount",
+                "order_count",
+                "refund_count",
+                "currency",
             ]
             for field in required_fields:
                 assert field in result, f"Missing required field: {field}"
@@ -136,7 +146,9 @@ class TestSquareClientIntegration:
             print(f"  Discounts: {discounts:.2f} {currency}")
             print(f"  Refunds: {refunds:.2f} {currency}")
             print(f"  Net Sales: {net_sales:.2f} {currency}")
-            print(f"  Orders: {result['order_count']}, Refunds: {result['refund_count']}")
+            print(
+                f"  Orders: {result['order_count']}, Refunds: {result['refund_count']}"
+            )
 
         except Exception as e:
             pytest.fail(f"Integration test failed: {str(e)}")
@@ -154,14 +166,15 @@ class TestSquareClientIntegration:
 
             # Make API call - this should convert to French timezone properly
             result = await square_client.search_orders_by_date(
-                location_ids=[location_id],
-                target_date=target_date
+                location_ids=[location_id], target_date=target_date
             )
 
             # The test passes if no exception is thrown
             # The actual timezone conversion is tested in unit tests
             assert isinstance(result, list)
-            print(f"Timezone handling test passed - searched for orders on {target_date}")
+            print(
+                f"Timezone handling test passed - searched for orders on {target_date}"
+            )
 
         except Exception as e:
             # Only fail if it's not a simple "no data" case
@@ -183,8 +196,7 @@ class TestSquareClientIntegration:
         location_id = locations[0]["id"]
 
         await square_client.search_orders_by_date(
-            location_ids=[location_id],
-            target_date=target_date
+            location_ids=[location_id], target_date=target_date
         )
         end_time = time.time()
 

@@ -26,7 +26,7 @@ class SquareClient:
                 "Authorization": f"Bearer {self.access_token}",
                 "Square-Version": "2025-08-20",  # TODO: move to settings
                 "Content-Type": "application/json",
-            }
+            },
         )
 
     def _get_base_url(self) -> str:
@@ -40,7 +40,7 @@ class SquareClient:
         self,
         location_ids: List[str],
         target_date: date,
-        filter_field: str = "CLOSED_AT"
+        filter_field: str = "CLOSED_AT",
     ) -> List[Dict[str, Any]]:
         """
         Search for orders on a specific date using Square Orders API.
@@ -63,11 +63,15 @@ class SquareClient:
         french_tz = timezone(timedelta(hours=2))
 
         # Start of day in French timezone, converted to UTC
-        start_of_day_french = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=french_tz)
+        start_of_day_french = datetime.combine(
+            target_date, datetime.min.time()
+        ).replace(tzinfo=french_tz)
         start_utc = start_of_day_french.astimezone(timezone.utc)
 
         # End of day in French timezone, converted to UTC
-        end_of_day_french = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=french_tz)
+        end_of_day_french = datetime.combine(target_date, datetime.max.time()).replace(
+            tzinfo=french_tz
+        )
         end_utc = end_of_day_french.astimezone(timezone.utc)
 
         # Prepare request body
@@ -77,12 +81,12 @@ class SquareClient:
                 "filter": {
                     "date_time_filter": {
                         "field": filter_field,
-                        "start_at": start_utc.isoformat().replace('+00:00', 'Z'),
-                        "end_at": end_utc.isoformat().replace('+00:00', 'Z')
+                        "start_at": start_utc.isoformat().replace("+00:00", "Z"),
+                        "end_at": end_utc.isoformat().replace("+00:00", "Z"),
                     }
                 }
             },
-            "limit": 500  # Maximum allowed by Square API
+            "limit": 500,  # Maximum allowed by Square API
         }
 
         all_orders = []
@@ -93,7 +97,9 @@ class SquareClient:
                 if cursor:
                     request_body["cursor"] = cursor
 
-                response = await self.client.post("/v2/orders/search", json=request_body)
+                response = await self.client.post(
+                    "/v2/orders/search", json=request_body
+                )
                 response.raise_for_status()
 
                 data = response.json()
@@ -106,7 +112,9 @@ class SquareClient:
 
                 logger.info(f"Retrieved {len(orders)} orders, continuing with cursor")
 
-            logger.info(f"Successfully retrieved {len(all_orders)} orders for {target_date}")
+            logger.info(
+                f"Successfully retrieved {len(all_orders)} orders for {target_date}"
+            )
             return all_orders
 
         except Exception as e:
@@ -140,7 +148,7 @@ class SquareClient:
                 "net_sales_amount": 0,
                 "order_count": 0,
                 "refund_count": 0,
-                "currency": "EUR"  # Default currency
+                "currency": "EUR",  # Default currency
             }
 
         gross_sales = 0
@@ -166,7 +174,11 @@ class SquareClient:
             returns = order.get("returns", [])
             for return_item in returns:
                 refund_count += 1
-                return_amount = return_item.get("return_amounts", {}).get("total_money", {}).get("amount", 0)
+                return_amount = (
+                    return_item.get("return_amounts", {})
+                    .get("total_money", {})
+                    .get("amount", 0)
+                )
                 # Return amounts are negative in Square API, make them positive for our calculation
                 total_refunds += abs(return_amount)
 
@@ -179,7 +191,7 @@ class SquareClient:
             "net_sales_amount": net_sales,
             "order_count": len(orders),
             "refund_count": refund_count,
-            "currency": currency
+            "currency": currency,
         }
 
         logger.info(f"Revenue calculation complete: {result}")
@@ -218,7 +230,7 @@ class SquareClient:
             new_sales_orders = await self.search_orders_by_date(
                 location_ids=[location_id],
                 target_date=target_date,
-                filter_field="CLOSED_AT"
+                filter_field="CLOSED_AT",
             )
 
             # Step 2: Fetch refunds (orders updated on this date due to returns)
@@ -226,7 +238,7 @@ class SquareClient:
             refund_orders = await self.search_orders_by_date(
                 location_ids=[location_id],
                 target_date=target_date,
-                filter_field="UPDATED_AT"
+                filter_field="UPDATED_AT",
             )
 
             # Step 3: Calculate revenue from new sales
@@ -238,7 +250,9 @@ class SquareClient:
             # Step 5: Combine the results
             total_gross_sales = new_sales_revenue["gross_sales_amount"]
             total_discounts = new_sales_revenue["total_discounts"]
-            total_refunds = new_sales_revenue["total_refunds"] + refund_revenue["total_refunds"]
+            total_refunds = (
+                new_sales_revenue["total_refunds"] + refund_revenue["total_refunds"]
+            )
 
             net_sales = total_gross_sales - total_discounts - total_refunds
 
@@ -250,11 +264,14 @@ class SquareClient:
                 "total_refunds": total_refunds,
                 "net_sales_amount": net_sales,
                 "order_count": new_sales_revenue["order_count"],
-                "refund_count": new_sales_revenue["refund_count"] + refund_revenue["refund_count"],
-                "currency": new_sales_revenue.get("currency", "EUR")
+                "refund_count": new_sales_revenue["refund_count"]
+                + refund_revenue["refund_count"],
+                "currency": new_sales_revenue.get("currency", "EUR"),
             }
 
-            logger.info(f"Daily revenue calculation complete: net_sales={net_sales} {result['currency']}")
+            logger.info(
+                f"Daily revenue calculation complete: net_sales={net_sales} {result['currency']}"
+            )
             return result
 
         except Exception as e:

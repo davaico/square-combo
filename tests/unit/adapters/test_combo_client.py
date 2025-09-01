@@ -16,9 +16,7 @@ class TestComboClientGetLocations:
 
     @respx.mock
     async def test_get_locations_success_with_teams(
-        self,
-        combo_client: ComboClient,
-        mock_locations_response: List[Dict[str, Any]]
+        self, combo_client: ComboClient, mock_locations_response: List[Dict[str, Any]]
     ):
         """Test successful API call returning locations with teams."""
         # Mock the API response
@@ -54,7 +52,7 @@ class TestComboClientGetLocations:
     async def test_get_locations_success_empty_list(
         self,
         combo_client: ComboClient,
-        mock_empty_locations_response: List[Dict[str, Any]]
+        mock_empty_locations_response: List[Dict[str, Any]],
     ):
         """Test successful API call returning empty locations list."""
         # Mock the API response
@@ -74,7 +72,9 @@ class TestComboClientGetLocations:
         """Test handling of 401 Unauthorized error."""
         # Mock the API response
         respx.get("https://partner.combohr.com/api/v1/locations").mock(
-            return_value=httpx.Response(401, json={"error": "Unauthorized"}) # TODO: verify error model
+            return_value=httpx.Response(
+                401, json={"error": "Unauthorized"}
+            )  # TODO: verify error model
         )
 
         # Call the method and expect exception
@@ -88,7 +88,9 @@ class TestComboClientGetLocations:
         """Test handling of 500 Server Error."""
         # Mock the API response
         respx.get("https://partner.combohr.com/api/v1/locations").mock(
-            return_value=httpx.Response(500, json={"error": "Internal Server Error"}) # TODO: verify error model
+            return_value=httpx.Response(
+                500, json={"error": "Internal Server Error"}
+            )  # TODO: verify error model
         )
 
         # Call the method and expect exception
@@ -159,6 +161,7 @@ class TestComboClientPostRevenue:
         request = mock_request.calls[0].request
         sent_payload = request.content
         import json
+
         assert json.loads(sent_payload) == {
             "location_id": location_id,
             "date": date_str,
@@ -184,7 +187,12 @@ class TestComboClientPostRevenue:
         """Test API error for invalid payload (e.g., missing amount)."""
         # Mock the API response for a 422 error
         respx.post("https://partner.combohr.com/api/v1/revenues").mock(
-            return_value=httpx.Response(422, json={"error": "At least one of 'amount' or 'estimated amount' must be present"})
+            return_value=httpx.Response(
+                422,
+                json={
+                    "error": "At least one of 'amount' or 'estimated amount' must be present"
+                },
+            )
         )
 
         # Call the method and expect an exception

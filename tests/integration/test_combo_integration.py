@@ -41,8 +41,13 @@ class TestComboClientIntegration:
 
                 # Check required fields exist
                 required_fields = [
-                    "id", "name", "account_id", "partner_id",
-                    "snapshift_account_id", "snapshift_location_id", "teams"
+                    "id",
+                    "name",
+                    "account_id",
+                    "partner_id",
+                    "snapshift_account_id",
+                    "snapshift_location_id",
+                    "teams",
                 ]
                 for field in required_fields:
                     assert field in location, f"Missing required field: {field}"
@@ -79,10 +84,10 @@ class TestComboClientIntegration:
             locations = await combo_client.get_locations()
             if not locations:
                 pytest.skip("No locations found in Combo account to post revenue to.")
-            
+
             location_id = locations[0]["id"]
             target_date = date.today().strftime("%Y-%m-%d")
-            amount = 99.99 # A test amount
+            amount = 99.99  # A test amount
 
             # Make the real API call
             result = await combo_client.post_revenue(location_id, target_date, amount)
@@ -94,7 +99,9 @@ class TestComboClientIntegration:
             assert result.get("date") == target_date
             assert result.get("actual_amount") == amount
 
-            print(f"Successfully posted revenue of {amount} to location {location_id} on {target_date}")
+            print(
+                f"Successfully posted revenue of {amount} to location {location_id} on {target_date}"
+            )
 
         except Exception as e:
             pytest.fail(f"Integration test for post_revenue failed: {str(e)}")

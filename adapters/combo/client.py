@@ -22,7 +22,7 @@ class ComboClient:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-            }
+            },
         )
 
     async def get_locations(self) -> List[Dict[str, Any]]:

@@ -20,7 +20,7 @@ load_dotenv()
 logging.basicConfig(
     # level=logging.DEBUG,
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 
@@ -33,13 +33,14 @@ def test_settings():
         SQUARE_ACCESS_TOKEN=os.getenv("SQUARE_ACCESS_TOKEN", "test_square_token"),
         SQUARE_APPLICATION_ID=os.getenv("SQUARE_APPLICATION_ID", "test_app_id"),
         SQUARE_ENVIRONMENT=os.getenv("SQUARE_ENVIRONMENT", "sandbox"),
-        LOG_LEVEL="DEBUG"
+        LOG_LEVEL="DEBUG",
     )
 
 
 # ---------------------
 # Combo client fixtures
 # ---------------------
+
 
 @pytest_asyncio.fixture
 async def combo_client(test_settings):
@@ -63,15 +64,9 @@ def mock_locations_response() -> List[Dict[str, Any]]:
             "snapshift_account_id": 101,
             "snapshift_location_id": 201,
             "teams": [
-                {
-                    "id": "team_001",
-                    "name": "Morning Team"
-                },
-                {
-                    "id": "team_002",
-                    "name": "Evening Team"
-                }
-            ]
+                {"id": "team_001", "name": "Morning Team"},
+                {"id": "team_002", "name": "Evening Team"},
+            ],
         },
         {
             "id": "loc_456",
@@ -80,8 +75,8 @@ def mock_locations_response() -> List[Dict[str, Any]]:
             "partner_id": "partner_789",
             "snapshift_account_id": 101,
             "snapshift_location_id": 202,
-            "teams": []
-        }
+            "teams": [],
+        },
     ]
 
 
@@ -102,7 +97,7 @@ def mock_single_location_response() -> List[Dict[str, Any]]:
             "partner_id": "partner_789",
             "snapshift_account_id": 101,
             "snapshift_location_id": 203,
-            "teams": []
+            "teams": [],
         }
     ]
 
@@ -110,6 +105,7 @@ def mock_single_location_response() -> List[Dict[str, Any]]:
 # ---------------------
 # Square client fixtures
 # ---------------------
+
 
 @pytest_asyncio.fixture
 async def square_client(test_settings, request):
@@ -120,7 +116,7 @@ async def square_client(test_settings, request):
     client = SquareClient(
         access_token=test_settings.SQUARE_ACCESS_TOKEN,
         application_id=test_settings.SQUARE_APPLICATION_ID,
-        environment=environment
+        environment=environment,
     )
     try:
         yield client
@@ -140,59 +136,29 @@ def mock_square_orders_response() -> List[Dict[str, Any]]:
             "updated_at": "2025-08-22T10:35:00Z",
             "closed_at": "2025-08-22T10:35:00Z",
             "net_amounts": {
-                "total_money": {
-                    "amount": 2500,  # $25.00 in cents
-                    "currency": "EUR"
-                },
-                "tax_money": {
-                    "amount": 200,   # $2.00 tax
-                    "currency": "EUR"
-                },
-                "discount_money": {
-                    "amount": 300,   # $3.00 discount
-                    "currency": "EUR"
-                }
+                "total_money": {"amount": 2500, "currency": "EUR"},  # $25.00 in cents
+                "tax_money": {"amount": 200, "currency": "EUR"},  # $2.00 tax
+                "discount_money": {"amount": 300, "currency": "EUR"},  # $3.00 discount
             },
-            "total_money": {
-                "amount": 2500,
-                "currency": "EUR"
-            },
-            "total_tax_money": {
-                "amount": 200,
-                "currency": "EUR"
-            },
-            "total_discount_money": {
-                "amount": 300,
-                "currency": "EUR"
-            },
+            "total_money": {"amount": 2500, "currency": "EUR"},
+            "total_tax_money": {"amount": 200, "currency": "EUR"},
+            "total_discount_money": {"amount": 300, "currency": "EUR"},
             "line_items": [
                 {
                     "uid": "item_1",
                     "name": "Coffee",
                     "quantity": "2",
-                    "total_money": {
-                        "amount": 1600,
-                        "currency": "EUR"
-                    },
-                    "total_discount_money": {
-                        "amount": 200,
-                        "currency": "EUR"
-                    }
+                    "total_money": {"amount": 1600, "currency": "EUR"},
+                    "total_discount_money": {"amount": 200, "currency": "EUR"},
                 },
                 {
-                    "uid": "item_2", 
+                    "uid": "item_2",
                     "name": "Pastry",
                     "quantity": "1",
-                    "total_money": {
-                        "amount": 900,
-                        "currency": "EUR"
-                    },
-                    "total_discount_money": {
-                        "amount": 100,
-                        "currency": "EUR"
-                    }
-                }
-            ]
+                    "total_money": {"amount": 900, "currency": "EUR"},
+                    "total_discount_money": {"amount": 100, "currency": "EUR"},
+                },
+            ],
         },
         {
             "id": "order_456",
@@ -202,31 +168,19 @@ def mock_square_orders_response() -> List[Dict[str, Any]]:
             "updated_at": "2025-08-22T14:20:00Z",
             "closed_at": "2025-08-22T14:20:00Z",
             "net_amounts": {
-                "total_money": {
-                    "amount": 1200,  # $12.00
-                    "currency": "EUR"
-                }
+                "total_money": {"amount": 1200, "currency": "EUR"}  # $12.00
             },
-            "total_money": {
-                "amount": 1200,
-                "currency": "EUR"
-            },
-            "total_tax_money": {
-                "amount": 100,
-                "currency": "EUR"
-            },
+            "total_money": {"amount": 1200, "currency": "EUR"},
+            "total_tax_money": {"amount": 100, "currency": "EUR"},
             "line_items": [
                 {
                     "uid": "item_3",
                     "name": "Sandwich",
                     "quantity": "1",
-                    "total_money": {
-                        "amount": 1200,
-                        "currency": "EUR"
-                    }
+                    "total_money": {"amount": 1200, "currency": "EUR"},
                 }
-            ]
-        }
+            ],
+        },
     ]
 
 
@@ -241,10 +195,7 @@ def mock_square_orders_with_refunds() -> List[Dict[str, Any]]:
             "created_at": "2025-08-21T16:00:00Z",
             "updated_at": "2025-08-22T11:00:00Z",  # Updated today due to refund
             "closed_at": "2025-08-21T16:05:00Z",
-            "total_money": {
-                "amount": 2000,
-                "currency": "EUR"
-            },
+            "total_money": {"amount": 2000, "currency": "EUR"},
             "returns": [
                 {
                     "uid": "return_1",
@@ -256,18 +207,15 @@ def mock_square_orders_with_refunds() -> List[Dict[str, Any]]:
                             "quantity": "1",
                             "total_money": {
                                 "amount": -800,  # Negative for refund
-                                "currency": "EUR"
-                            }
+                                "currency": "EUR",
+                            },
                         }
                     ],
                     "return_amounts": {
-                        "total_money": {
-                            "amount": -800,
-                            "currency": "EUR"
-                        }
-                    }
+                        "total_money": {"amount": -800, "currency": "EUR"}
+                    },
                 }
-            ]
+            ],
         }
     ]
 
@@ -281,10 +229,7 @@ def mock_square_empty_orders() -> List[Dict[str, Any]]:
 @pytest.fixture
 def mock_square_search_response() -> Dict[str, Any]:
     """Mock response wrapper for Square orders search API."""
-    return {
-        "orders": [],  # Will be populated by specific test
-        "cursor": None
-    }
+    return {"orders": [], "cursor": None}  # Will be populated by specific test
 
 
 @pytest.fixture
@@ -292,5 +237,5 @@ def mock_square_paginated_response() -> Dict[str, Any]:
     """Mock response with pagination cursor."""
     return {
         "orders": [],  # Will be populated by specific test
-        "cursor": "next_page_cursor_123"
+        "cursor": "next_page_cursor_123",
     }

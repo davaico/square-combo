@@ -46,7 +46,7 @@ class SyncService:
             # --- Current Simplified Implementation ---
             # This logic syncs the first available Square location to the first available Combo location.
             # It is intended for basic testing and demonstration.
-            
+
             square_locations = await square_client.get_locations()
             if not square_locations:
                 logger.warning(f"No locations found in Square for client {client.id}.")
@@ -59,9 +59,13 @@ class SyncService:
                 return {"status": "skipped", "reason": "No locations found in Combo"}
             combo_location = combo_locations[0]
 
-            revenue_data = await square_client.get_daily_revenue(square_location["id"], target_date)
+            revenue_data = await square_client.get_daily_revenue(
+                square_location["id"], target_date
+            )
             if not revenue_data or revenue_data.get("net_sales_amount", 0) == 0:
-                logger.info(f"No revenue for '{square_location['name']}' on {target_date}.")
+                logger.info(
+                    f"No revenue for '{square_location['name']}' on {target_date}."
+                )
                 return {"status": "success", "posted_revenue": 0}
 
             net_sales = revenue_data["net_sales_amount"] / 100.0
@@ -70,13 +74,15 @@ class SyncService:
                 date=target_date.strftime("%Y-%m-%d"),
                 amount=net_sales,
             )
-            logger.info(f"Successfully synced {net_sales} from '{square_location['name']}' to '{combo_location['name']}'.")
+            logger.info(
+                f"Successfully synced {net_sales} from '{square_location['name']}' to '{combo_location['name']}'."
+            )
             return {"status": "success", "posted_revenue": net_sales}
 
             # --- Future Robust Implementation (example to be tested later) ---
             # This is the intended final logic that should be used in production.
             # It relies on a database mapping of locations.
-            
+
             # # Step 1: Fetch mapped locations for the client from the database
             # mapped_locations = self.db.query(Location).filter(Location.client_id == client.id, Location.is_active == True).all()
             # if not mapped_locations:
@@ -94,11 +100,14 @@ class SyncService:
             #         combo_client=combo_client
             #     )
             #     sync_logs.append(log)
-            
+
             # return {"status": "completed", "logs": [log.id for log in sync_logs]}
 
         except Exception as e:
-            logger.error(f"An error occurred during sync for client {client.id}: {e}", exc_info=True)
+            logger.error(
+                f"An error occurred during sync for client {client.id}: {e}",
+                exc_info=True,
+            )
             return {"status": "failed", "error": str(e)}
 
         finally:

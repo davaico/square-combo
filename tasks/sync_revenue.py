@@ -32,15 +32,18 @@ async def sync_daily_revenue():
         # For a temporary manual run and square/combo end to end API testing, we will create a temporary client object
         # with credentials from the environment settings.
         from database.models import Client
+
         temp_client = Client(
-            id=1, # Dummy ID
+            id=1,  # Dummy ID
             square_access_token=settings.SQUARE_ACCESS_TOKEN,
             square_application_id=settings.SQUARE_APPLICATION_ID,
-            combo_api_key=settings.COMBO_API_KEY
+            combo_api_key=settings.COMBO_API_KEY,
         )
 
-        logger.info(f"Syncing revenue data for date: {target_date} for temporary client")
-        
+        logger.info(
+            f"Syncing revenue data for date: {target_date} for temporary client"
+        )
+
         # Run the sync for our temporary client
         result = await sync_service.sync_client_revenue(temp_client, target_date)
         logger.info(f"Sync result: {result}")
