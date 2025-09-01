@@ -24,7 +24,7 @@ class SquareClient:
             base_url=self.base_url,
             headers={
                 "Authorization": f"Bearer {self.access_token}",
-                "Square-Version": "2025-07-16",  # TODO: move to settings
+                "Square-Version": "2025-08-20",  # TODO: move to settings
                 "Content-Type": "application/json",
             }
         )
@@ -268,9 +268,15 @@ class SquareClient:
         Returns:
             List of location dictionaries
         """
-        # TODO: Implement Square locations API call
         logger.info("Fetching locations from Square API")
-        pass
+        try:
+            response = await self.client.get("/v2/locations")
+            response.raise_for_status()
+            data = response.json()
+            return data.get("locations", [])
+        except Exception as e:
+            logger.error(f"Failed to fetch locations from Square: {str(e)}")
+            raise
 
     async def close(self):
         """Close the HTTP client."""

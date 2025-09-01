@@ -59,21 +59,39 @@ class ComboClient:
             raise
 
     async def post_revenue(
-        self, location_id: str, revenue_data: Dict[str, Any]
+        self, location_id: str, date: str, amount: float
     ) -> Dict[str, Any]:
         """
         Post daily revenue data to Combo API.
 
         Args:
-            location_id: Combo location ID
-            revenue_data: Revenue data to post
+            location_id: The partner ID of the location.
+            date: The date of the revenue in ISO 8601 format (YYYY-MM-DD).
+            amount: The actual revenue amount.
 
         Returns:
-            API response dictionary
+            API response dictionary.
+
+        Raises:
+            httpx.HTTPStatusError: If API returns error status code.
         """
-        # TODO: Implement Combo revenue posting API call
-        logger.info(f"Posting revenue data to Combo for location {location_id}")
-        pass
+        logger.info(f"Posting revenue for location {location_id} on {date}: {amount}")
+
+        payload = {
+            "location_id": location_id,
+            "date": date,
+            "amount": amount,
+        }
+
+        try:
+            response = await self.client.post("/api/v1/revenues", json=payload)
+            response.raise_for_status()
+            logger.info(f"Successfully posted revenue for location {location_id}")
+            return response.json()
+
+        except Exception as e:
+            logger.error(f"Failed to post revenue for location {location_id}: {str(e)}")
+            raise
 
     async def close(self):
         """Close the HTTP client."""

@@ -43,12 +43,63 @@ class SyncService:
         combo_client = ComboClient(api_key=client.combo_api_key)
 
         try:
-            # TODO: Implement the sync logic:
-            # 1. Get locations from Square
-            # 2. For each location, fetch revenue
-            # 3. Map and post to Combo
-            # 4. Log results
-            pass
+            # --- Current Simplified Implementation ---
+            # This logic syncs the first available Square location to the first available Combo location.
+            # It is intended for basic testing and demonstration.
+            
+            square_locations = await square_client.get_locations()
+            if not square_locations:
+                logger.warning(f"No locations found in Square for client {client.id}.")
+                return {"status": "skipped", "reason": "No locations found in Square"}
+            square_location = square_locations[0]
+
+            combo_locations = await combo_client.get_locations()
+            if not combo_locations:
+                logger.warning(f"No locations found in Combo for client {client.id}.")
+                return {"status": "skipped", "reason": "No locations found in Combo"}
+            combo_location = combo_locations[0]
+
+            revenue_data = await square_client.get_daily_revenue(square_location["id"], target_date)
+            if not revenue_data or revenue_data.get("net_sales_amount", 0) == 0:
+                logger.info(f"No revenue for '{square_location['name']}' on {target_date}.")
+                return {"status": "success", "posted_revenue": 0}
+
+            net_sales = revenue_data["net_sales_amount"] / 100.0
+            await combo_client.post_revenue(
+                location_id=combo_location["id"],
+                date=target_date.strftime("%Y-%m-%d"),
+                amount=net_sales,
+            )
+            logger.info(f"Successfully synced {net_sales} from '{square_location['name']}' to '{combo_location['name']}'.")
+            return {"status": "success", "posted_revenue": net_sales}
+
+            # --- Future Robust Implementation (example to be tested later) ---
+            # This is the intended final logic that should be used in production.
+            # It relies on a database mapping of locations.
+            
+            # # Step 1: Fetch mapped locations for the client from the database
+            # mapped_locations = self.db.query(Location).filter(Location.client_id == client.id, Location.is_active == True).all()
+            # if not mapped_locations:
+            #     logger.warning(f"No mapped locations found for client {client.id}. Skipping sync.")
+            #     return {"status": "skipped", "reason": "No mapped locations"}
+
+            # # Step 2: For each mapped location, sync the revenue
+            # sync_logs = []
+            # for location in mapped_locations:
+            #     log = await self.sync_location_revenue(
+            #         client=client,
+            #         location=location,
+            #         target_date=target_date,
+            #         square_client=square_client,
+            #         combo_client=combo_client
+            #     )
+            #     sync_logs.append(log)
+            
+            # return {"status": "completed", "logs": [log.id for log in sync_logs]}
+
+        except Exception as e:
+            logger.error(f"An error occurred during sync for client {client.id}: {e}", exc_info=True)
+            return {"status": "failed", "error": str(e)}
 
         finally:
             await square_client.close()
