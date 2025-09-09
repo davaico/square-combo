@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Combo for Square</title>
+</head>
+<body>
+<h1>Connect your accounts</h1>
+<p>Sync real-time data from Square to Combo</p>
+<p>Log in to your Square accounts and provide Combo API key to get stared.</p>
+<div class="provider">
+    <p>{{square_auth_url}}</p>
+    <a href="{{square_auth_url}}">Log in with Square</a>
+</div>
+<div class="provider">
+    <p>Combo</p>
+    <form method="post" action="">
+        <input type="text" name="api_key" placeholder="Provide Combo API Key"/>
+    </form>
+</div>
+</body>
+</html>

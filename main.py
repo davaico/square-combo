@@ -4,9 +4,11 @@ Main FastAPI application entry point.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from routes.auth import router as auth_router
 from routes.admin import router as admin_router
+from routes.templates import router as templates_router
 from utils.config import settings
 from utils.logging import setup_logging
 
@@ -31,6 +33,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(admin_router, prefix="/admin", tags=["admin"])
+app.include_router(templates_router, prefix="/templates", tags=["templates"])
 
 
 @app.get("/health")

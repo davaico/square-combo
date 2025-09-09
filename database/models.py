@@ -18,7 +18,7 @@ class Client(Base):
     name = Column(String(255), nullable=False)
     square_access_token = Column(Text, nullable=False)
     square_application_id = Column(String(255), nullable=False)
-    combo_api_key = Column(Text, nullable=False)
+    combo_api_key = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

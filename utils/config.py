@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    # Square Configuration
+    SQUARE_BASE_URL: str
+    SQUARE_CLIENT_ID: str
+    SQUARE_CLIENT_SECRET: str
+
 
 # Create global settings instance
 settings = Settings()
