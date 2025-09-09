@@ -3,7 +3,7 @@ Combo API client adapter.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import httpx
 
 from utils.config import settings
@@ -25,7 +25,7 @@ class ComboClient:
             },
         )
 
-    async def get_locations(self) -> List[Dict[str, Any]]:
+    async def get_locations(self) -> Optional[List[Dict[str, Any]]]:
         """
         Fetch all locations from Combo API.
 
@@ -56,7 +56,7 @@ class ComboClient:
 
         except Exception as e:
             logger.error(f"Failed to fetch locations: {str(e)}")
-            raise
+            return None
 
     async def post_revenue(
         self, location_id: str, date: str, amount: float

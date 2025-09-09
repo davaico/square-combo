@@ -21,6 +21,8 @@ app = FastAPI(
     version="0.0.1",
 )
 
+app.mount("/static", StaticFiles(directory="templates"), name="static")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,

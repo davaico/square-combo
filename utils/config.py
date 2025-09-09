@@ -10,14 +10,15 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    # Square API Configuration
-    SQUARE_APPLICATION_ID: str = ""
-    SQUARE_ACCESS_TOKEN: str = ""
-    SQUARE_ENVIRONMENT: str = "sandbox"  # sandbox or production
+    # Square Configuration
+    SQUARE_BASE_URL: str = "https://connect.squareup.com"
+    SQUARE_CLIENT_ID: str = "sq0idp-ZoH-IKZWWKazQ6eBwQpyWw"
+    SQUARE_CLIENT_SECRET: str = "sq0csp-HNIzu38p3B4_v3C6CHTF8s8x6wieLiyEQr2IsyzH6bA"
+    SQUARE_ENVIRONMENT: str = "production"  # sandbox or production
 
     # Combo API Configuration
     COMBO_API_KEY: str = ""
-    COMBO_BASE_URL: str = "https://api.combo.com"
+    COMBO_BASE_URL: str = "https://partner.combohr.com"
 
     # Database Configuration
     DATABASE_URL: str = "sqlite:///./square_combo.db"
@@ -30,11 +31,6 @@ class Settings(BaseSettings):
     # Server Configuration
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-
-    # Square Configuration
-    SQUARE_BASE_URL: str
-    SQUARE_CLIENT_ID: str
-    SQUARE_CLIENT_SECRET: str
 
 
 # Create global settings instance
