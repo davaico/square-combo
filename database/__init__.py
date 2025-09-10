@@ -1,6 +1,10 @@
+import logging
+
 from database.database import init_db
 
+logger = logging.getLogger(__name__)
+
 if __name__ == "__main__":
-    print("🚀 Creating database and tables...")
+    logger.info("Creating database and tables...")
     init_db()
-    print("✅ Done! Database created at square_combo.db")
+    logger.info("Finished creating database and tables")

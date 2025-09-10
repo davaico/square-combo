@@ -56,7 +56,7 @@ class ComboClient:
 
         except Exception as e:
             logger.error(f"Failed to fetch locations: {str(e)}")
-            return None
+            raise
 
     async def post_revenue(
         self, location_id: str, date: str, amount: float

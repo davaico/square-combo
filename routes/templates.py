@@ -104,9 +104,11 @@ async def submit_combo_api_key_request(request: Request,
     combo_client: ComboClient = ComboClient(
         api_key=api_key,
     )
-    locations = await combo_client.get_locations()
-    if not locations:
+    try:
+        locations = await combo_client.get_locations()
+    except Exception as e:
         return HTMLResponse(content=get_setup_status_script(SetupStatusEnum.COMBO_API_KEY_INVALID, client_id))
+
     update_fields = {
         "combo_api_key": api_key,
     }
