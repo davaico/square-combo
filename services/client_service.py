@@ -36,11 +36,25 @@ class ClientService:
         ).all()
 
     def get_client_by_id(self, client_id: int) -> Optional[Client]:
+        """
+        Retrieve a client by ID.
+        Args:
+            client_id: Client ID
+        Returns:
+            Client object or None if not found
+        """
         logger.info(f"Fetching client with ID: {client_id}")
         client = self.db.query(Client).filter(Client.id == client_id).first()
         return client
 
     def create_client(self, client_data: dict[str, Any]) -> Client:
+        """
+        Create a new client.
+        Args:
+            client_data: Dictionary containing client information
+        Returns:
+            Created Client object
+        """
         logger.info("Creating new client")
         new_client: Client = Client(
             name=client_data["name"],

@@ -278,6 +278,11 @@ class SquareClient:
             raise
 
     async def get_locations(self) -> List[Dict[str, Any]]:
+        """
+        Fetch all locations for the authenticated merchant.
+        Returns:
+            List of location dictionaries
+        """
         logger.info("Fetching locations from Square API")
         try:
             response = await self.client.get("/v2/locations")
