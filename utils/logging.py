@@ -70,7 +70,7 @@ def setup_logging():
             },
             "adapters": {
                 "level": "INFO",
-                "handlers": ["sync_file"],
+                "handlers": ["file"],
                 "propagate": False,
             },
             "uvicorn": {

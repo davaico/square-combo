@@ -48,3 +48,24 @@ class SetupService:
             logger.error(f"Failed to obtain Square access token: {e}")
             return None
 
+    async def refresh_square_access_token(self, refresh_token: str) -> Optional[dict[str, Any]]:
+        try:
+            request = {
+                "client_id": settings.SQUARE_CLIENT_ID,
+                "client_secret": settings.SQUARE_CLIENT_SECRET,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token
+            }
+
+            response = await self.client.post(
+                f"{settings.SQUARE_BASE_URL}/oauth2/token",
+                json=request,
+            )
+
+            response.raise_for_status()
+            return response.json()
+
+        except (httpx.HTTPError, ValueError) as e:
+            logger.error(f"Failed to refresh Square access token: {e}")
+            return None
+

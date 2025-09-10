@@ -19,6 +19,7 @@ class Client(Base):
     square_access_token = Column(Text, nullable=False)
     square_refresh_token = Column(Text, nullable=False)
     square_access_token_expiry_date = Column(DateTime, nullable=False)
+    square_access_token_revoked = Column(Boolean, default=False)
     square_merchant_id = Column(String(255), nullable=False)
     combo_api_key = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)

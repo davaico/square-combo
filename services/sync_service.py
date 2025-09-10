@@ -38,7 +38,6 @@ class SyncService:
         # Initialize API clients
         square_client = SquareClient(
             access_token=client.square_access_token,
-            application_id=client.square_application_id,
         )
         combo_client = ComboClient(api_key=client.combo_api_key)
 
