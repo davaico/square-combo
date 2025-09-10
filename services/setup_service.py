@@ -5,7 +5,7 @@ from typing import List, Optional, Any
 from urllib.request import Request
 
 from sqlalchemy.orm import Session
-from database.models import Client, Location
+from database.models import Client
 from utils.config import settings
 
 logger = logging.getLogger(__name__)

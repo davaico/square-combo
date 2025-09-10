@@ -27,20 +27,20 @@ class Client(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
-class Location(Base):
-    """Location model to store Square location information."""
-
-    __tablename__ = "locations"
-
-    id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, nullable=False)  # Foreign key to Client
-    square_location_id = Column(String(255), nullable=False, unique=True)
-    combo_location_id = Column(String(255), nullable=True)  # May be mapped later
-    name = Column(String(255), nullable=False)
-    address = Column(Text, nullable=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+# class Location(Base):
+#     """Location model to store Square location information."""
+#
+#     __tablename__ = "locations"
+#
+#     id = Column(Integer, primary_key=True, index=True)
+#     client_id = Column(Integer, nullable=False)  # Foreign key to Client
+#     square_location_id = Column(String(255), nullable=False, unique=True)
+#     combo_location_id = Column(String(255), nullable=True)  # May be mapped later
+#     name = Column(String(255), nullable=False)
+#     address = Column(Text, nullable=True)
+#     is_active = Column(Boolean, default=True)
+#     created_at = Column(DateTime(timezone=True), server_default=func.now())
+#     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 class SyncLog(Base):
@@ -50,7 +50,10 @@ class SyncLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, nullable=False)
-    location_id = Column(Integer, nullable=False)
+    square_location_id = Column(Text, nullable=False)
+    combo_location_id = Column(Text, nullable=False)
+    square_location_name = Column(String(255), nullable=True)
+    combo_location_name = Column(String(255), nullable=True)
     sync_date = Column(DateTime(timezone=True), nullable=False)  # Date of revenue data
     revenue_amount = Column(Numeric(10, 2), nullable=True)  # Amount synced
     status = Column(String(50), nullable=False)  # success, failed, pending

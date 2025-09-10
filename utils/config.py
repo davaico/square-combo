@@ -18,11 +18,6 @@ class Settings(BaseSettings):
     SQUARE_CLIENT_SECRET: str = ""
     SQUARE_ENVIRONMENT: str = ""  # sandbox or production
 
-    # SQUARE_BASE_URL: str = "YOUR_SQUARE_BASE_URL"
-    # SQUARE_CLIENT_ID: str = "YOUR_SQUARE_CLIENT_ID"
-    # SQUARE_CLIENT_SECRET: str = "YOUR_SQUARE_CLIENT_SECRET"
-    # SQUARE_ENVIRONMENT: str = "sandbox"
-
     # Combo API Configuration
     COMBO_API_KEY: str = ""
     COMBO_BASE_URL: str = "https://partner.combohr.com"

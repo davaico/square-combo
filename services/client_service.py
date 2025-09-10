@@ -8,7 +8,7 @@ from typing import List, Optional, Any
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from database.models import Client, Location
+from database.models import Client
 
 logger = logging.getLogger(__name__)
 
@@ -84,20 +84,6 @@ class ClientService:
         self.db.commit()
         self.db.refresh(client)
         return client
-
-    def get_client_locations(self, client_id: int) -> List[Location]:
-        """
-        Retrieve all locations for a client.
-
-        Args:
-            client_id: Client ID
-
-        Returns:
-            List of Location objects
-        """
-        # TODO: Implement location retrieval for client
-        logger.info(f"Fetching locations for client {client_id}")
-        pass
 
     def get_client_by_merchant_id(self, merchant_id: str) -> Optional[Client]:
         logger.info(f"Fetching client with merchant ID: {merchant_id}")
