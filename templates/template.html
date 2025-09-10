@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Combo for Square</title>
+    <link rel="stylesheet" href="/static/template.css">
+</head>
+<body>
+<h1>Connect your accounts</h1>
+<p>Sync real-time data from Square to Combo</p>
+<p>Log in to your Square accounts and provide Combo API key to get stared.</p>
+
+<!--Square provider element-->
+<div class="provider" id="square_provider_not_connected">
+    <p>Square</p>
+    <button onclick="openSquareAuth('{{ square_auth_url }}')">Log in with Square</button>
+</div>
+<div class="provider" id="square_provider_connected" style="display: none">
+    <p>Square</p>
+    <p style="color: aqua">Connected</p>
+</div>
+
+<!--Combo provider element-->
+<div class="provider" id="combo_provider_not_connected" style="display: none">
+    <p>Combo</p>
+    <form id="comboForm" method="post" target="comboPopup">
+        <input type="hidden" id="client_id_input" name="client_id" value=""/>
+        <input type="text" name="api_key" placeholder="Provide Combo API Key" required/>
+        <input type="submit" name="connect" value="Connect"/>
+    </form>
+</div>
+<div class="provider" id="combo_provider_connected" style="display: none">
+    <p>Combo</p>
+    <p style="color: aqua">Connected</p>
+</div>
+
+<p id="setup_status"></p>
+
+<script src="/static/template.js"></script>
+</body>
+</html>

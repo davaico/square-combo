@@ -15,9 +15,8 @@ logger = logging.getLogger(__name__)
 class SquareClient:
     """Client for interacting with Square API."""
 
-    def __init__(self, access_token: str, application_id: str, environment: str = None):
+    def __init__(self, access_token: str, environment: str = None):
         self.access_token = access_token
-        self.application_id = application_id
         self.environment = environment or settings.SQUARE_ENVIRONMENT
         self.base_url = self._get_base_url()
         self.client = httpx.AsyncClient(
@@ -281,7 +280,6 @@ class SquareClient:
     async def get_locations(self) -> List[Dict[str, Any]]:
         """
         Fetch all locations for the authenticated merchant.
-
         Returns:
             List of location dictionaries
         """
@@ -291,6 +289,17 @@ class SquareClient:
             response.raise_for_status()
             data = response.json()
             return data.get("locations", [])
+        except Exception as e:
+            logger.error(f"Failed to fetch locations from Square: {str(e)}")
+            raise
+
+    async def get_merchant_by_id(self, merchant_id: str) -> Dict[str, Any]:
+        logger.info("Fetching merchant info from Square API")
+        try:
+            response = await self.client.get(f"/v2/merchants/{merchant_id}")
+            response.raise_for_status()
+            data = response.json()
+            return data.get("merchant", {})
         except Exception as e:
             logger.error(f"Failed to fetch locations from Square: {str(e)}")
             raise
