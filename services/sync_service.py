@@ -127,7 +127,7 @@ class SyncService:
             )
             if not revenue_data or revenue_data.get("net_sales_amount", 0) == 0:
                 logger.info(
-                    f"No revenue for '{mapped_location["square_location_name"]}' on {target_date}."
+                    f"No revenue for '{mapped_location['square_location_name']}' on {target_date}."
                 )
                 return {"status": "success", "posted_revenue": 0}
 
