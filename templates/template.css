@@ -41,7 +41,7 @@ body {
 }
 
 .logo {
-    height: 48px;
+    height: 64px;
     width: auto;
     object-fit: contain;
 }
@@ -88,6 +88,9 @@ h1 {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
     border: 1px solid #e2e8f0;
     transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .provider-card:hover {
@@ -108,7 +111,7 @@ h1 {
 }
 
 .provider-logo {
-    height: 24px;
+    height: 32px;
     width: auto;
     object-fit: contain;
 }
@@ -205,6 +208,11 @@ h1 {
     background: white;
     border-radius: 8px;
     border: 1px solid #e2e8f0;
+    display: none; /* Hidden by default, shown by JavaScript when needed */
+}
+
+.setup-status:not(:empty) {
+    display: block; /* Show when it has content */
 }
 
 /* Mobile responsiveness */
@@ -218,7 +226,7 @@ h1 {
     }
     
     .logo {
-        height: 40px;
+        height: 56px;
     }
     
     h1 {
@@ -275,43 +283,4 @@ h1 {
     }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    body {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        color: #f8fafc;
-    }
-    
-    .provider-card {
-        background: #1e293b;
-        border-color: #334155;
-        color: #f8fafc;
-    }
-    
-    .provider-card.connected {
-        background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
-        border-color: #059669;
-    }
-    
-    .api-input {
-        background: #334155;
-        border-color: #475569;
-        color: #f8fafc;
-    }
-    
-    .api-input::placeholder {
-        color: #94a3b8;
-    }
-    
-    .setup-status {
-        background: #1e293b;
-        border-color: #334155;
-        color: #cbd5e1;
-    }
-    
-    .status-badge {
-        background: #065f46;
-        color: #a7f3d0;
-        border-color: #059669;
-    }
-}
+/* Force light mode - no dark mode */
