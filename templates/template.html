@@ -2,40 +2,62 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Combo for Square</title>
     <link rel="stylesheet" href="/static/template.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-<h1>Connect your accounts</h1>
-<p>Sync real-time data from Square to Combo</p>
-<p>Log in to your Square accounts and provide Combo API key to get stared.</p>
+    <div class="container">
+        <header class="header">
+            <div class="logo-section">
+                <img src="/static/square-logo.png" alt="Square" class="logo square-logo" style="height: 230px; margin-top: 10px;">
+                <div class="connector">→</div>
+                <img src="/static/combo-logo.png" alt="Combo" class="logo combo-logo">
+            </div>
+            <h1>Connect your accounts</h1>
+            <p class="subtitle">Sync real-time data from Square to Combo</p>
+            <p class="description">Log in to your Square accounts and provide Combo API key to get started.</p>
+        </header>
 
-<!--Square provider element-->
-<div class="provider" id="square_provider_not_connected">
-    <p>Square</p>
-    <button onclick="openSquareAuth('{{ square_auth_url }}')">Log in with Square</button>
-</div>
-<div class="provider" id="square_provider_connected" style="display: none">
-    <p>Square</p>
-    <p style="color: aqua">Connected</p>
-</div>
+        <main class="main-content">
+            <!--Square provider element-->
+            <div class="provider-card" id="square_provider_not_connected">
+                <button class="connect-btn primary" onclick="openSquareAuth('{{ square_auth_url }}')">
+                    Log in with Square
+                </button>
+            </div>
 
-<!--Combo provider element-->
-<div class="provider" id="combo_provider_not_connected" style="display: none">
-    <p>Combo</p>
-    <form id="comboForm" method="post" target="comboPopup">
-        <input type="hidden" id="client_id_input" name="client_id" value=""/>
-        <input type="text" name="api_key" placeholder="Provide Combo API Key" required/>
-        <input type="submit" name="connect" value="Connect"/>
-    </form>
-</div>
-<div class="provider" id="combo_provider_connected" style="display: none">
-    <p>Combo</p>
-    <p style="color: aqua">Connected</p>
-</div>
+            <div class="provider-card connected" id="square_provider_connected" style="display: none">
+                <div class="provider-header">
+                    <h3>Square</h3>
+                </div>
+                <div class="status-badge">✓ Connected</div>
+            </div>
 
-<p id="setup_status"></p>
+            <!--Combo provider element-->
+            <div class="provider-card" id="combo_provider_not_connected" style="display: none">
+                <div class="provider-header">
+                    <h3>Combo</h3>
+                </div>
+                <form id="comboForm" method="post" target="comboPopup" class="combo-form">
+                    <input type="hidden" id="client_id_input" name="client_id" value=""/>
+                    <input type="text" name="api_key" placeholder="Enter your Combo API Key" class="api-input" required/>
+                    <button type="submit" name="connect" class="connect-btn secondary">Connect</button>
+                </form>
+            </div>
 
-<script src="/static/template.js"></script>
+            <div class="provider-card connected" id="combo_provider_connected" style="display: none">
+                <div class="provider-header">
+                    <h3>Combo</h3>
+                </div>
+                <div class="status-badge">✓ Connected</div>
+            </div>
+
+            <div id="setup_status" class="setup-status"></div>
+        </main>
+    </div>
+
+    <script src="/static/template.js"></script>
 </body>
 </html>
