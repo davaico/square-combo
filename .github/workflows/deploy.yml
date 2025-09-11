@@ -13,30 +13,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Deploy to VM over SSH
-        uses: appleboy/ssh-action@v0.1.7
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            cd ~/apps/square-combo || exit 1
-            git fetch origin master
-            git reset --hard origin/master
+            APP_DIR=/home/${{ secrets.VM_USER }}/apps/square-combo
+            VENV_DIR=$APP_DIR/venv
 
-            # setup venv if not exists
-            if [ ! -d "venv" ]; then
-              python3 -m venv venv
-            fi
+            mkdir -p $APP_DIR
 
-            source venv/bin/activate
-            pip install --upgrade pip
-            pip install -r requirements.txt
-
-            # restart app
-            if systemctl --user is-enabled square-combo.service &>/dev/null; then
-              systemctl --user restart square-combo.service
+            if [ ! -d "$APP_DIR/.git" ]; then
+              git clone git@github.com:davaico/square-combo.git . $APP_DIR
             else
-              pkill -f "uvicorn" || true
-              nohup venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+              cd $APP_DIR
+              git fetch origin master
+              git reset --hard origin/master
             fi
+
+            if [ ! -d "$VENV_DIR" ]; then
+              python3 -m venv $VENV_DIR
+            fi
+
+            source $VENV_DIR/bin/activate
+
+            pip install --upgrade pip
+            pip install -r $APP_DIR/requirements.txt
+
+            sudo systemctl restart square-combo || \
+              (echo "Service not found, please create /etc/systemd/system/square-combo.service")
