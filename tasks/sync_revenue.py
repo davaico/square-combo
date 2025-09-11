@@ -9,11 +9,12 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 
 from database.database import SessionLocal
+from services.client_service import ClientService
+from services.setup_service import SetupService
 from services.sync_service import SyncService
 from utils.config import settings
 
 logger = logging.getLogger(__name__)
-
 
 async def sync_daily_revenue():
     """
@@ -25,28 +26,36 @@ async def sync_daily_revenue():
     db = SessionLocal()
     try:
         sync_service = SyncService(db)
+        client_service = ClientService(db)
+        setup_service = SetupService(db)
 
         # Calculate target date (previous day by default)
         target_date = date.today() - timedelta(days=settings.SYNC_DAYS_BACK)
+        logger.info(f"Syncing daily revenue for {target_date}")
 
-        # For a temporary manual run and square/combo end to end API testing, we will create a temporary client object
-        # with credentials from the environment settings.
-        from database.models import Client
+        # Get list of current clients
+        clients = client_service.get_all_active_clients()
+        logger.info(f"Found {len(clients)} active clients")
 
-        temp_client = Client(
-            id=1,  # Dummy ID
-            square_access_token=settings.SQUARE_ACCESS_TOKEN,
-            square_application_id=settings.SQUARE_APPLICATION_ID,
-            combo_api_key=settings.COMBO_API_KEY,
-        )
+        for client in clients:
+            # Validate square access token expiry date for client
+            if client.square_access_token_expiry_date < datetime.now():
+                logger.info(f"Refreshing access token for client {client.square_merchant_id}")
+                new_token = await setup_service.refresh_square_access_token(client.square_refresh_token)
+                if not new_token:
+                    logger.error(f"Failed to refresh access token for client {client.square_merchant_id}")
+                    continue
+                #Save new access token and refresh token to database
+                update_token = {
+                    "square_access_token": new_token.get("access_token"),
+                    "square_refresh_token": new_token.get("refresh_token"),
+                    "square_access_token_expiry_date": new_token.get("expires_at"),
+                }
+                client = client_service.update_client(client.id, update_token)
 
-        logger.info(
-            f"Syncing revenue data for date: {target_date} for temporary client"
-        )
-
-        # Run the sync for our temporary client
-        result = await sync_service.sync_client_revenue(temp_client, target_date)
-        logger.info(f"Sync result: {result}")
+            logger.info(f"Syncing daily revenue for client {client.square_merchant_id}")
+            result = await sync_service.sync_client_revenue(client, target_date)
+            logger.info(f"Sync result: {result}")
 
     except Exception as e:
         logger.error(f"Error during daily revenue sync: {e}")

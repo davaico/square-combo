@@ -47,7 +47,6 @@ async def main():
     logging.info("Initializing API clients...")
     square_client = SquareClient(
         access_token=settings.SQUARE_ACCESS_TOKEN,
-        application_id=settings.SQUARE_APPLICATION_ID,
         environment=settings.SQUARE_ENVIRONMENT,
     )
     combo_client = ComboClient(api_key=settings.COMBO_API_KEY)
