@@ -55,17 +55,6 @@ async def sync_daily_revenue():
         db.close()
         logger.info("Daily revenue sync process completed")
 
-
-def setup_cron_job():
-    """
-    Set up the cron job for daily revenue sync.
-    This function should be called during application startup.
-    """
-    # TODO: Implement cron job setup using python-crontab
-    logger.info("Setting up cron job for daily revenue sync")
-    pass
-
-
 if __name__ == "__main__":
     # Allow running the sync manually for testing
     asyncio.run(sync_daily_revenue())
