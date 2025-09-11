@@ -23,10 +23,7 @@ class Settings(BaseSettings):
     COMBO_BASE_URL: str = "https://partner.combohr.com"
 
     # Database Configuration
-
-    BASE_DIR: Path = Path(__file__).resolve().parent.parent  # project root
-    DATABASE_URL: str = f"sqlite:///{BASE_DIR}/square_combo.db"
-    #DATABASE_URL: str = "sqlite:///./square_combo.db"
+    DATABASE_URL: str = "sqlite:///./square_combo.db"
 
     # Application Configuration
     LOG_LEVEL: str = "INFO"
