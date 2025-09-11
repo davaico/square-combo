@@ -35,7 +35,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(admin_router, prefix="/admin", tags=["admin"])
-app.include_router(templates_router, prefix="/templates", tags=["templates"])
+app.include_router(templates_router, prefix="", tags=["templates"])
 
 
 @app.get("/health")
@@ -44,7 +44,7 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.get("/")
+@app.get("/info")
 async def root():
     """Root endpoint."""
     return {"message": "Square-Combo Integration", "version": "0.0.1"}
