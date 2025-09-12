@@ -16,14 +16,15 @@ class Settings(BaseSettings):
     SQUARE_BASE_URL: str = "https://connect.squareup.com"
     SQUARE_CLIENT_ID: str = ""
     SQUARE_CLIENT_SECRET: str = ""
-    SQUARE_ENVIRONMENT: str = ""  # sandbox or production
+    SQUARE_ENVIRONMENT: str = "production"  # sandbox or production
 
     # Combo API Configuration
     COMBO_API_KEY: str = ""
     COMBO_BASE_URL: str = "https://partner.combohr.com"
 
     # Database Configuration
-    DATABASE_URL: str = "sqlite:///./square_combo.db"
+    BASE_DIR: Path = Path(__file__).resolve().parent.parent
+    DATABASE_URL: str = f"sqlite:///{BASE_DIR / 'square_combo.db'}"
 
     # Application Configuration
     LOG_LEVEL: str = "INFO"
