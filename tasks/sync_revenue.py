@@ -30,7 +30,7 @@ async def sync_daily_revenue():
         setup_service = SetupService(db)
 
         # Calculate target date (previous day by default)
-        target_date = date.today() - timedelta(days=settings.SYNC_DAYS_BACK)
+        target_date = datetime.now() - timedelta(days=settings.SYNC_DAYS_BACK)
         logger.info(f"Syncing daily revenue for {target_date}")
 
         # Get list of current clients

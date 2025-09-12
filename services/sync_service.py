@@ -3,7 +3,7 @@ Sync service for handling revenue synchronization between Square and Combo.
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,7 @@ class SyncService:
         self.db = db
 
     async def sync_client_revenue(
-        self, client: Client, target_date: date
+        self, client: Client, target_date: datetime
     ) -> list[Dict[str, Any]]:
         """
         Sync revenue for a single client across all their locations.
@@ -57,6 +57,7 @@ class SyncService:
                 return [{"status": "skipped", "reason": "No locations found in Combo"}]
 
             mapped_locations = self.map_square_combo_locations(square_locations, combo_locations)
+            logger.info(f"Found {len(mapped_locations)} mapped locations for client {client.square_merchant_id}.")
 
             result: list[dict[str, Any]] = []
             for mapped_location in mapped_locations:
@@ -99,19 +100,23 @@ class SyncService:
                 "combo_location_name": combo_location.get("name")
             }]
 
-        combo_lookup = {cbl["name"]: cbl for cbl in combo_locations}
+            # make lookup case-insensitive
+        combo_lookup = {cbl["name"].lower(): cbl for cbl in combo_locations if cbl.get("name")}
 
         merged: list[dict[str, Any]] = []
         for square_location in square_locations:
-            name = square_location["name"]
-            combo_location = combo_lookup.get(name)
+            name = square_location.get("name")
+            if not name:
+                continue
+
+            combo_location = combo_lookup.get(name.lower())
 
             if combo_location:
                 merged.append({
                     "square_location_id": square_location["id"],
                     "square_location_name": name,
                     "combo_location_id": combo_location["id"],
-                    "combo_location_name": name
+                    "combo_location_name": combo_location.get("name")
                 })
 
         return merged
@@ -120,7 +125,7 @@ class SyncService:
                                     square_client: SquareClient,
                                     combo_client: ComboClient,
                                     mapped_location: dict[str, Any],
-                                    target_date: date) -> dict[str, Any]:
+                                    target_date: datetime) -> dict[str, Any]:
         try:
             revenue_data = await square_client.get_daily_revenue(
                 mapped_location["square_location_id"], target_date
@@ -148,7 +153,7 @@ class SyncService:
         combo_location_id: str,
         square_location_name: str,
         combo_location_name: str,
-        sync_date: date,
+        sync_date: datetime,
         status: str,
         revenue_amount: Optional[float] = None,
         error_message: Optional[str] = None,
