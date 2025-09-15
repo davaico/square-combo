@@ -28,6 +28,10 @@ def setup_logging():
                 "format": "%(asctime)s - %(name)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
+            "sync-format":{
+                "format": "%(asctime)s - %(levelname)s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            }
         },
         "handlers": {
             "console": {
@@ -47,7 +51,7 @@ def setup_logging():
             "sync_file": {
                 "class": "logging.handlers.RotatingFileHandler",
                 "level": "INFO",
-                "formatter": "detailed",
+                "formatter": "sync-format",
                 "filename": "logs/sync.log",
                 "maxBytes": 10485760,  # 10MB
                 "backupCount": 10,
