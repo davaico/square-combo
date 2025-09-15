@@ -63,11 +63,6 @@ def setup_logging():
                 "handlers": ["sync_file"],
                 "propagate": False,
             },
-            "services.sync_service": {
-                "level": "INFO",
-                "handlers": ["sync_file"],
-                "propagate": False,
-            },
             "adapters": {
                 "level": "INFO",
                 "handlers": ["file"],
