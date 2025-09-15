@@ -2,7 +2,7 @@
 Main FastAPI application entry point.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -41,7 +41,10 @@ app.include_router(templates_router, prefix="", tags=["templates"])
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return Response(
+        content="# HELP app_health Application health\n# TYPE app_health gauge\napp_health 1\n",
+        media_type="text/plain"
+    )
 
 
 @app.get("/info")
