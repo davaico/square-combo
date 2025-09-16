@@ -53,8 +53,17 @@ async def sync_daily_revenue():
                 }
                 client = client_service.update_client(client.id, update_token)
 
-            result = await sync_service.sync_client_revenue(client, target_date)
-            logger.info(f"\t\tSync result: {result}")
+            results = await sync_service.sync_client_revenue(client, target_date)
+            has_error = False
+            for result in results:
+                if result.get("status") == "failed":
+                    has_error = True
+                    break
+
+            if has_error:
+                logger.error(f"\t\tSync result: {results}")
+            else:
+                logger.info(f"\t\tSync result: {results}")
 
     except Exception as e:
         logger.error(f"Error during daily revenue sync: {e}")
