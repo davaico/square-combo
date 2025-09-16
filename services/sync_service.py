@@ -62,7 +62,7 @@ class SyncService:
             result: list[dict[str, Any]] = []
             for mapped_location in mapped_locations:
                 response = await self.sync_location_revenue(square_client, combo_client, mapped_location, target_date)
-                self.create_sync_log(
+                sync_log = self.create_sync_log(
                     client.id,
                     mapped_location.get("square_location_id"),
                     mapped_location.get("combo_location_id"),
@@ -73,6 +73,7 @@ class SyncService:
                     response.get("posted_revenue"),
                     response.get("error"),
                 )
+                response["sync_log_id"] = sync_log.id
                 result.append(response)
             return result
 
