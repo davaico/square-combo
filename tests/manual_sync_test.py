@@ -131,7 +131,6 @@ async def main():
                 f"Posting revenue to the first Combo location: {target_combo_location_id}"
             )
 
-            # Disable to debug Square
             post_response = await combo_client.post_revenue(
                 location_id=target_combo_location_id,
                 date=target_date.strftime("%Y-%m-%d"),
