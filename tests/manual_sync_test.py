@@ -46,7 +46,7 @@ async def main():
     """Runs a full end-to-end revenue sync for one location."""
     logging.info("Initializing API clients...")
     square_client = SquareClient(
-        access_token="EAAAlsuY9wg_dDDTm1P0ebkh4CwBrAA6zdgXTutx6nJGb4Ftd9Bi4PH4U_k7uCwb",
+        access_token=settings.SQUARE_ACCESS_TOKEN,
         environment=settings.SQUARE_ENVIRONMENT,
     )
     combo_client = ComboClient(api_key=settings.COMBO_API_KEY)
