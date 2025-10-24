@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from adapters.square.client import SquareClient
 from adapters.combo.client import ComboClient
 from utils.config import settings
@@ -66,12 +66,12 @@ async def main():
 
         # --- Step 2: Create Multiple Test Orders in Square ---
         # This requires ORDERS_WRITE permission.
-        logging.info("Creating 3 test orders...")
-        await create_square_order(square_client, target_square_location["id"])
-        await asyncio.sleep(1)  # Small delay to ensure orders are processed
-        await create_square_order(square_client, target_square_location["id"])
-        await asyncio.sleep(1)
-        await create_square_order(square_client, target_square_location["id"])
+        # logging.info("Creating 3 test orders...")
+        # await create_square_order(square_client, target_square_location["id"])
+        # await asyncio.sleep(1)  # Small delay to ensure orders are processed
+        # await create_square_order(square_client, target_square_location["id"])
+        # await asyncio.sleep(1)
+        # await create_square_order(square_client, target_square_location["id"])
 
         # --- Step 3: Fetch Today's Revenue from Square ---
         target_date = date.today()

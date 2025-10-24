@@ -132,27 +132,13 @@ python tasks/sync_revenue.py
 - Tracks all sync operations and results
 - Fields: id, client_id, location_id, sync_date, revenue_amount, status, error_message
 
-## Configuration Options
-
-Environment variables in `.env`:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SQUARE_APPLICATION_ID` | Square application ID | - |
-| `SQUARE_ACCESS_TOKEN` | Square access token | - |
-| `SQUARE_ENVIRONMENT` | Square environment (sandbox/production) | sandbox |
-| `COMBO_API_KEY` | Combo API key | - |
-| `COMBO_BASE_URL` | Combo API base URL | https://api.combo.com |
-| `DATABASE_URL` | Database connection string | sqlite:///./square_combo.db |
-| `LOG_LEVEL` | Logging level | INFO |
-| `SYNC_TIME` | Daily sync time (HH:MM) | 00:00 |
-| `SYNC_DAYS_BACK` | Days back to fetch revenue | 1 |
-| `HOST` | Server host | 0.0.0.0 |
-| `PORT` | Server port | 8000 |
-
 ## Deployment
 
 ### Azure VM Deployment
+
+```bash
+ssh -i ~/.ssh/square-combo-vm_key.pem davaiadmin@20.199.52.39
+```
 
 1. **VM Setup**
    ```bash
