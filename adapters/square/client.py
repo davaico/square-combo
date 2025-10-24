@@ -3,7 +3,7 @@ Square API client adapter.
 """
 
 import logging
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, date, time, timezone, timedelta
 from typing import List, Dict, Any, Optional
 import httpx
 
@@ -61,27 +61,32 @@ class SquareClient:
         # TODO: move to settings
         french_tz = timezone(timedelta(hours=2))
 
-        # Start of day in French timezone, converted to UTC
-        start_of_day_french = datetime.combine(
-            target_date, datetime.min.time()
-        ).replace(tzinfo=french_tz)
-        start_utc = start_of_day_french.astimezone(timezone.utc)
+        # Start: target_date at 6am in French timezone, converted to UTC
+        start_french = datetime.combine(target_date, time(6, 0, 0)).replace(tzinfo=french_tz)
+        start_utc = start_french.astimezone(timezone.utc)
 
-        # End of day in French timezone, converted to UTC
-        end_of_day_french = datetime.combine(target_date, datetime.max.time()).replace(
-            tzinfo=french_tz
-        )
-        end_utc = end_of_day_french.astimezone(timezone.utc)
+        # End: next day at 6am in French timezone, converted to UTC
+        next_day = target_date + timedelta(days=1)
+        end_french = datetime.combine(next_day, time(6, 0, 0)).replace(tzinfo=french_tz)
+        end_utc = end_french.astimezone(timezone.utc)
 
         # Prepare request body
+        # Map filter field to the correct API key
+        filter_key = filter_field.lower().replace("_", "_")  # "CLOSED_AT" -> "closed_at"
+
+        logger.info(f"Filter key: {filter_key}")
+        logger.info(f"Start UTC: {start_utc}")
+        logger.info(f"End UTC: {end_utc}")
+
         request_body = {
             "location_ids": location_ids,
             "query": {
                 "filter": {
                     "date_time_filter": {
-                        "field": filter_field,
-                        "start_at": start_utc.isoformat().replace("+00:00", "Z"),
-                        "end_at": end_utc.isoformat().replace("+00:00", "Z"),
+                        filter_key: {
+                            "start_at": start_utc.isoformat().replace("+00:00", "Z"),
+                            "end_at": end_utc.isoformat().replace("+00:00", "Z"),
+                        }
                     }
                 }
             },
@@ -114,6 +119,8 @@ class SquareClient:
             logger.info(
                 f"Successfully retrieved {len(all_orders)} orders for {target_date}"
             )
+
+            logger.info(f"All orders: {all_orders}")
             return all_orders
 
         except Exception as e:

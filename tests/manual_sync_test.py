@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from adapters.square.client import SquareClient
 from adapters.combo.client import ComboClient
 from utils.config import settings
@@ -46,7 +46,7 @@ async def main():
     """Runs a full end-to-end revenue sync for one location."""
     logging.info("Initializing API clients...")
     square_client = SquareClient(
-        access_token=settings.SQUARE_ACCESS_TOKEN,
+        access_token="EAAAlsuY9wg_dDDTm1P0ebkh4CwBrAA6zdgXTutx6nJGb4Ftd9Bi4PH4U_k7uCwb",
         environment=settings.SQUARE_ENVIRONMENT,
     )
     combo_client = ComboClient(api_key=settings.COMBO_API_KEY)
@@ -66,12 +66,12 @@ async def main():
 
         # --- Step 2: Create Multiple Test Orders in Square ---
         # This requires ORDERS_WRITE permission.
-        logging.info("Creating 3 test orders...")
-        await create_square_order(square_client, target_square_location["id"])
-        await asyncio.sleep(1)  # Small delay to ensure orders are processed
-        await create_square_order(square_client, target_square_location["id"])
-        await asyncio.sleep(1)
-        await create_square_order(square_client, target_square_location["id"])
+        # logging.info("Creating 3 test orders...")
+        # await create_square_order(square_client, target_square_location["id"])
+        # await asyncio.sleep(1)  # Small delay to ensure orders are processed
+        # await create_square_order(square_client, target_square_location["id"])
+        # await asyncio.sleep(1)
+        # await create_square_order(square_client, target_square_location["id"])
 
         # --- Step 3: Fetch Today's Revenue from Square ---
         target_date = date.today()
@@ -131,6 +131,7 @@ async def main():
                 f"Posting revenue to the first Combo location: {target_combo_location_id}"
             )
 
+            # Disable to debug Square
             post_response = await combo_client.post_revenue(
                 location_id=target_combo_location_id,
                 date=target_date.strftime("%Y-%m-%d"),

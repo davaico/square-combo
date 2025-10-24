@@ -6,7 +6,6 @@ This adapter provides a client for interacting with the Square API. It is used t
 
 The `SquareClient` requires the following environment variables to be set in the `.env` file:
 
--   `SQUARE_ACCESS_TOKEN`: Your personal access token for the Square API.
 -   `SQUARE_APPLICATION_ID`: The ID of your application in the Square Developer Dashboard.
 -   `SQUARE_ENVIRONMENT`: The environment to use, either `sandbox` or `production`.
 
