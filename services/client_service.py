@@ -1,92 +1,50 @@
-"""
-Client service for managing client data and operations.
-"""
-import logging
-from datetime import datetime
-from typing import List, Optional, Any
+"""Merchant identity and credential persistence; authorization lives in onboarding."""
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from database.models import Client
-
-logger = logging.getLogger(__name__)
+from utils.dates import utc_naive
 
 
 class ClientService:
-    """Service class for client-related operations."""
-
     def __init__(self, db: Session):
         self.db = db
 
-    def get_all_active_clients(self) -> List[Client]:
-        """
-        Retrieve all active clients.
-
-        Returns:
-            List of active Client objects
-        """
-
-        logger.info("Fetching all active clients")
-        return self.db.query(Client).filter(
-            and_(
+    def get_all_active_clients(self) -> list[Client]:
+        return (
+            self.db.query(Client)
+            .filter(
+                Client.is_active.is_(True),
+                Client.square_access_token_revoked.is_(False),
                 Client.combo_api_key.isnot(None),
-                Client.square_access_token_revoked == False
+                Client.combo_api_key != "",
             )
-        ).all()
-
-    def get_client_by_id(self, client_id: int) -> Optional[Client]:
-        """
-        Retrieve a client by ID.
-        Args:
-            client_id: Client ID
-        Returns:
-            Client object or None if not found
-        """
-        logger.info(f"Fetching client with ID: {client_id}")
-        client = self.db.query(Client).filter(Client.id == client_id).first()
-        return client
-
-    def create_client(self, client_data: dict[str, Any]) -> Client:
-        """
-        Create a new client.
-        Args:
-            client_data: Dictionary containing client information
-        Returns:
-            Created Client object
-        """
-        logger.info("Creating new client")
-        new_client: Client = Client(
-            name=client_data["name"],
-            square_access_token=client_data.get("square_access_token"),
-            square_merchant_id=client_data.get("square_merchant_id"),
-            square_refresh_token=client_data.get("square_refresh_token"),
-            square_access_token_expiry_date=datetime.fromisoformat(client_data.get("square_access_token_expiry_date").replace("Z", "+00:00")),
-            combo_api_key=client_data.get("combo_api_key")
+            .all()
         )
-        self.db.add(new_client)
-        self.db.commit()
-        self.db.refresh(new_client)
-        return new_client
 
-    def update_client(self, client_id: int, updated_data: dict):
-        client = self.db.query(Client).filter(Client.id == client_id).first()
-        if not client:
-            return None
+    def get_client_by_id(self, client_id: int) -> Client | None:
+        return self.db.get(Client, client_id)
 
-        for key, value in updated_data.items():
-            if hasattr(client, key) and value is not None:
-                # Handle case for expiry date
-                if key == "square_access_token_expiry_date" and isinstance(value, str):
-                    value = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                setattr(client, key, value)
+    def get_client_by_merchant_id(self, merchant_id: str) -> Client | None:
+        return self.db.query(Client).filter_by(square_merchant_id=merchant_id).one_or_none()
 
+    def save_square_authorization(self, token: dict, name: str) -> Client:
+        client = self.get_client_by_merchant_id(token["merchant_id"])
+        if client is None:
+            client = Client(name=name, square_merchant_id=token["merchant_id"])
+            self.db.add(client)
+        client.name = name
+        client.square_access_token = token["access_token"]
+        client.square_refresh_token = token["refresh_token"]
+        client.square_access_token_expiry_date = utc_naive(token["expires_at"])
+        client.square_access_token_revoked = False
+        # Reauthorization preserves the operator's is_active policy and Combo key.
         self.db.commit()
         self.db.refresh(client)
         return client
 
-    def get_client_by_merchant_id(self, merchant_id: str) -> Optional[Client]:
-        logger.info(f"Fetching client with merchant ID: {merchant_id}")
-        client = self.db.query(Client).filter(Client.square_merchant_id == merchant_id).first()
-        return client
-
+    def save_refreshed_token(self, client: Client, token: dict) -> None:
+        client.square_access_token = token["access_token"]
+        client.square_refresh_token = token.get("refresh_token", client.square_refresh_token)
+        client.square_access_token_expiry_date = utc_naive(token["expires_at"])
+        self.db.commit()

@@ -1,0 +1,18 @@
+[Unit]
+Description=Reconcile closed business days from Square to Combo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=squarecombo
+Group=squarecombo
+WorkingDirectory=/srv/square-combo/current
+Environment=SQUARE_COMBO_ENV_FILE=/srv/square-combo/shared/app.env
+ExecStart=/srv/square-combo/current/venv/bin/python -m tasks.sync_revenue
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/square-combo/shared

@@ -1,77 +1,124 @@
-"""
-Daily revenue synchronization task.
-This module contains the main logic for syncing revenue data from Square to Combo.
-"""
+"""Scheduled synchronization, with isolated client failures and truthful exit status."""
 
+import argparse
 import asyncio
+import fcntl
 import logging
-from datetime import datetime, date, timedelta
-from sqlalchemy.orm import Session
+from contextlib import contextmanager
+from datetime import UTC, date, datetime, timedelta
 
 from database.database import SessionLocal
+from database.models import Client, SyncRun
 from services.client_service import ClientService
 from services.setup_service import SetupService
 from services.sync_service import SyncService
 from utils.config import settings
+from utils.dates import business_interval, last_closed_business_day, utc_naive
+from utils.http import safe_error
 from utils.logging import setup_logging
 
-logger = logging.getLogger("tasks.sync_revenue")
+logger = logging.getLogger(__name__)
 
-async def sync_daily_revenue():
-    """
-    Main function to sync daily revenue for all active clients.
-    This function is called by the cron job.
-    """
-    db = SessionLocal()
+
+@contextmanager
+def sync_lock():
+    settings.SYNC_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with settings.SYNC_LOCK_PATH.open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError("Another sync is already running") from error
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+async def sync_daily_revenue(target_date: date | None = None) -> bool:
+    target_date = target_date or last_closed_business_day()
+    if business_interval(target_date)[1] > datetime.now(UTC):
+        raise ValueError("Only closed business days can be synchronized")
+    started = utc_naive(datetime.now(UTC))
+    with SessionLocal() as db:
+        run = SyncRun(target_date=target_date, started_at=started, status="running")
+        db.add(run)
+        db.commit()
+        run_id = run.id
+        client_ids = [client.id for client in ClientService(db).get_all_active_clients()]
+    failed = 0
     try:
-        sync_service = SyncService(db)
-        client_service = ClientService(db)
-        setup_service = SetupService(db)
-
-        # Calculate target date (previous day by default)
-        target_date = datetime.now() - timedelta(days=settings.SYNC_DAYS_BACK)
-        logger.info(f"----- Starting daily revenue sync process for date: {target_date.date()} -----")
-
-        # Get list of current clients
-        clients = client_service.get_all_active_clients()
-        logger.info(f"Found {len(clients)} active clients")
-
-        for client in clients:
-            logger.info(f"\tSyncing daily revenue for client {client.square_merchant_id}")
-            # Validate square access token expiry date for client
-            if client.square_access_token_expiry_date < datetime.now():
-                logger.info(f"\t\tRefreshing access token for client {client.square_merchant_id}")
-                new_token = await setup_service.refresh_square_access_token(client.square_refresh_token)
-                if not new_token:
-                    logger.error(f"\t\tFailed to refresh access token for client {client.square_merchant_id}")
-                    continue
-                #Save new access token and refresh token to database
-                update_token = {
-                    "square_access_token": new_token.get("access_token"),
-                    "square_refresh_token": new_token.get("refresh_token"),
-                    "square_access_token_expiry_date": new_token.get("expires_at"),
-                }
-                client = client_service.update_client(client.id, update_token)
-
-            results = await sync_service.sync_client_revenue(client, target_date)
-            has_error = False
-            for result in results:
-                if result.get("status") == "failed":
-                    has_error = True
-                    break
-
-            if has_error:
-                logger.error(f"\t\tSync result: {results}")
-            else:
-                logger.info(f"\t\tSync result: {results}")
-
-    except Exception as e:
-        logger.error(f"Error during daily revenue sync: {e}")
+        for client_id in client_ids:
+            with SessionLocal() as db:
+                client = db.get(Client, client_id)
+                try:
+                    if (
+                        not client
+                        or not client.is_active
+                        or client.square_access_token_revoked
+                        or not client.combo_api_key
+                    ):
+                        continue  # operator may deactivate after selection
+                    if client.square_access_token_expiry_date <= utc_naive(
+                        datetime.now(UTC) + timedelta(minutes=5)
+                    ):
+                        token = await SetupService().refresh_square_access_token(
+                            client.square_refresh_token
+                        )
+                        ClientService(db).save_refreshed_token(client, token)
+                    results = await SyncService(db).sync_client_revenue(client, target_date)
+                    if not results or any(result["status"] != "success" for result in results):
+                        failed += 1
+                        logger.warning("Client %d failed on %s", client_id, target_date)
+                    else:
+                        logger.info("Client %d synchronized on %s", client_id, target_date)
+                except Exception as error:
+                    db.rollback()
+                    failed += 1
+                    logger.warning("Client %d failed: %s", client_id, safe_error(error))
+    except BaseException:
+        failed += 1
         raise
     finally:
-        db.close()
-        logger.info("Daily revenue sync process completed")
+        with SessionLocal() as db:
+            run = db.get(SyncRun, run_id)
+            run.completed_at = utc_naive(datetime.now(UTC))
+            run.status = "failed" if failed else "success"
+            run.failed_clients = failed
+            db.commit()
+    return failed == 0
+
+
+async def run_dates(target_date: date | None = None) -> bool:
+    with sync_lock():
+        dates = (
+            [target_date]
+            if target_date
+            else [
+                last_closed_business_day() - timedelta(days=offset)
+                for offset in range(settings.SYNC_LOOKBACK_DAYS)
+            ]
+        )
+        successful = True
+        for day in dates:
+            successful = await sync_daily_revenue(day) and successful
+        return successful
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--date",
+        type=date.fromisoformat,
+        help="Closed business date YYYY-MM-DD; otherwise reconcile the configured lookback",
+    )
+    args = parser.parse_args()
+    setup_logging()
+    try:
+        return 0 if asyncio.run(run_dates(args.date)) else 1
+    except Exception as error:
+        logger.error("Sync could not complete: %s", safe_error(error))
+        return 1
+
 
 if __name__ == "__main__":
-    setup_logging()
-    asyncio.run(sync_daily_revenue())
+    raise SystemExit(main())

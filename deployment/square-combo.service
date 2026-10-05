@@ -1,0 +1,22 @@
+[Unit]
+Description=Square to Combo account onboarding
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=squarecombo
+Group=squarecombo
+WorkingDirectory=/srv/square-combo/current
+Environment=SQUARE_COMBO_ENV_FILE=/srv/square-combo/shared/app.env
+ExecStart=/srv/square-combo/current/venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/square-combo/shared
+
+[Install]
+WantedBy=multi-user.target

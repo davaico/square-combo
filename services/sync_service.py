@@ -1,200 +1,151 @@
-"""
-Sync service for handling revenue synchronization between Square and Combo.
-"""
+"""Fail closed on ambiguous mapping and persist every attempted location result."""
 
 import logging
-from datetime import date, datetime
-from typing import Dict, Any, Optional
+from datetime import date, datetime, time
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
-from database.models import Client, SyncLog
-from adapters.square.client import SquareClient
 from adapters.combo.client import ComboClient
+from adapters.square.client import SquareClient
+from database.models import Client, LocationMapping, SyncLog
+from utils.config import settings
+from utils.http import safe_error
 
 logger = logging.getLogger(__name__)
 
 
-class SyncService:
-    """Service class for revenue synchronization operations."""
+class MappingError(ValueError):
+    pass
 
+
+class SyncService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def sync_client_revenue(
-        self, client: Client, target_date: datetime
-    ) -> list[Dict[str, Any]]:
-        """
-        Sync revenue for a single client across all their locations.
-
-        Args:
-            client: Client object
-            target_date: Date to sync revenue for
-
-        Returns:
-            Dictionary with sync results
-        """
-        logger.info(f"Starting revenue sync for client {client.id} on {target_date}")
-
-        # Initialize API clients
-        square_client = SquareClient(
-            access_token=client.square_access_token,
+    def map_square_combo_locations(
+        self,
+        square_locations: list[dict],
+        combo_locations: list[dict],
+        client_id: int | None = None,
+    ) -> list[dict]:
+        if not square_locations or not combo_locations:
+            raise MappingError("No active source or destination locations")
+        squares = {location["id"]: location for location in square_locations}
+        combos = {location["id"]: location for location in combo_locations}
+        if len(squares) != len(square_locations) or len(combos) != len(combo_locations):
+            raise MappingError("Duplicate provider location IDs")
+        explicit = (
+            self.db.query(LocationMapping).filter_by(client_id=client_id).all()
+            if client_id is not None
+            else []
         )
-        combo_client = ComboClient(api_key=client.combo_api_key)
-
-        try:
-            # --- Current Simplified Implementation ---
-            # This logic syncs the first available Square location to the first available Combo location.
-            # It is intended for basic testing and demonstration.
-
-            square_locations = await square_client.get_locations()
-            if not square_locations:
-                logger.warning(f"No locations found in Square for client {client.id}.")
-                return [{"status": "skipped", "reason": "No locations found in Square"}]
-
-            combo_locations = await combo_client.get_locations()
-            if not combo_locations:
-                logger.warning(f"No locations found in Combo for client {client.id}.")
-                return [{"status": "skipped", "reason": "No locations found in Combo"}]
-
-            mapped_locations = self.map_square_combo_locations(square_locations, combo_locations)
-            logger.info(f"Found {len(mapped_locations)} mapped locations for client {client.square_merchant_id}.")
-
-            result: list[dict[str, Any]] = []
-            for mapped_location in mapped_locations:
-                response = await self.sync_location_revenue(square_client, combo_client, mapped_location, target_date)
-                sync_log = self.create_sync_log(
-                    client.id,
-                    mapped_location.get("square_location_id"),
-                    mapped_location.get("combo_location_id"),
-                    mapped_location.get("square_location_name"),
-                    mapped_location.get("combo_location_name"),
-                    target_date,
-                    response.get("status"),
-                    response.get("posted_revenue"),
-                    response.get("error"),
+        pairs = {mapping.square_location_id: mapping.combo_location_id for mapping in explicit}
+        if pairs and (set(pairs) - set(squares) or set(pairs.values()) - set(combos)):
+            raise MappingError("Stored location mapping refers to unavailable locations")
+        names = {}
+        for combo in combo_locations:
+            name = combo.get("name", "").strip().casefold()
+            if name in names:
+                names[name] = None  # ambiguous names never choose an arbitrary location
+            else:
+                names[name] = combo["id"]
+        used = set()
+        result = []
+        for square in square_locations:
+            combo_id = pairs.get(square["id"])
+            if combo_id is None:
+                name = square.get("name", "").strip().casefold()
+                combo_id = names.get(name) if name else None
+                if (
+                    not combo_id
+                    and settings.ALLOW_SINGLE_LOCATION_MAPPING
+                    and len(squares) == len(combos) == 1
+                ):
+                    combo_id = next(iter(combos))
+            if not combo_id or combo_id in used:
+                raise MappingError(
+                    "Unmapped or ambiguous location; configure explicit unique mappings"
                 )
-                response["sync_log_id"] = sync_log.id
-                result.append(response)
-            return result
-
-        except Exception as e:
-            logger.error(
-                f"An error occurred during sync for client {client.id}: {e}",
-                exc_info=True,
+            used.add(combo_id)
+            result.append(
+                {
+                    "square_location_id": square["id"],
+                    "combo_location_id": combo_id,
+                    "square_location_name": square.get("name"),
+                    "combo_location_name": combos[combo_id].get("name"),
+                }
             )
-            return [{"status": "failed", "error": str(e)}]
+        return result
 
-        finally:
-            await square_client.close()
-            await combo_client.close()
-
-    def map_square_combo_locations(self,
-                                   square_locations: list[dict[str, Any]],
-                                   combo_locations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        if len(square_locations) == 1 and len(combo_locations) == 1:
-            square_location = square_locations[0]
-            combo_location = combo_locations[0]
-            return [{
-                "square_location_id": square_location["id"],
-                "square_location_name": square_location.get("name"),
-                "combo_location_id": combo_location["id"],
-                "combo_location_name": combo_location.get("name")
-            }]
-
-            # make lookup case-insensitive
-        combo_lookup = {cbl["name"].lower(): cbl for cbl in combo_locations if cbl.get("name")}
-
-        merged: list[dict[str, Any]] = []
-        for square_location in square_locations:
-            name = square_location.get("name")
-            if not name:
-                continue
-
-            combo_location = combo_lookup.get(name.lower())
-
-            if combo_location:
-                merged.append({
-                    "square_location_id": square_location["id"],
-                    "square_location_name": name,
-                    "combo_location_id": combo_location["id"],
-                    "combo_location_name": combo_location.get("name")
-                })
-
-        return merged
-
-    async def sync_location_revenue(self,
-                                    square_client: SquareClient,
-                                    combo_client: ComboClient,
-                                    mapped_location: dict[str, Any],
-                                    target_date: datetime) -> dict[str, Any]:
+    async def sync_client_revenue(self, client: Client, target_date: date) -> list[dict]:
         try:
-            revenue_data = await square_client.get_daily_revenue(
-                mapped_location["square_location_id"], target_date
-            )
-            if not revenue_data or revenue_data.get("net_sales_amount", 0) == 0:
-                logger.info(
-                    f"No revenue for '{mapped_location['square_location_name']}' on {target_date}."
+            async with (
+                SquareClient(client.square_access_token) as square,
+                ComboClient(client.combo_api_key) as combo,
+            ):
+                mapped = self.map_square_combo_locations(
+                    await square.get_locations(), await combo.get_locations(), client.id
                 )
-                return {"status": "success", "posted_revenue": 0}
+                results = []
+                for location in mapped:
+                    result = await self.sync_location_revenue(square, combo, location, target_date)
+                    try:
+                        log = self.create_sync_log(client.id, location, target_date, result)
+                        result["sync_log_id"] = log.id
+                    except Exception as error:
+                        self.db.rollback()
+                        result = {
+                            "status": "failed",
+                            "error": f"Audit write failed: {safe_error(error)}",
+                        }
+                    results.append(result)
+                return results
+        except Exception as error:
+            self.db.rollback()
+            reason = str(error) if isinstance(error, MappingError) else safe_error(error)
+            logger.warning("Client %d synchronization failed: %s", client.id, reason)
+            return [{"status": "failed", "error": reason}]
 
-            net_sales = revenue_data["net_sales_amount"] / 100.0
-            await combo_client.post_revenue(
-                location_id=mapped_location["combo_location_id"],
-                date=target_date.strftime("%Y-%m-%d"),
-                amount=net_sales,
-            )
-            return {"status": "success", "posted_revenue": net_sales}
-        except Exception as e:
-            return {"status": "failed", "error": str(e)}
+    async def sync_location_revenue(
+        self, square: SquareClient, combo: ComboClient, location: dict, target_date: date
+    ) -> dict:
+        try:
+            revenue = await square.get_daily_revenue(location["square_location_id"], target_date)
+            if revenue is None:
+                raise ValueError("Missing revenue response")
+            minor_units = revenue["net_sales_amount"]
+            if (
+                not isinstance(minor_units, int)
+                or isinstance(minor_units, bool)
+                or revenue["currency"] != settings.REVENUE_CURRENCY
+            ):
+                raise ValueError("Invalid revenue amount or currency")
+            amount = Decimal(minor_units) / Decimal(100)
+            if abs(amount) >= Decimal("100000000"):
+                raise ValueError("Revenue exceeds audit amount capacity")
+            # A valid zero is an update too; negative refund-only days are supported.
+            await combo.post_revenue(location["combo_location_id"], target_date.isoformat(), amount)
+            return {"status": "success", "posted_revenue": amount}
+        except Exception as error:
+            return {"status": "failed", "error": safe_error(error)}
 
     def create_sync_log(
-        self,
-        client_id: int,
-        square_location_id: str,
-        combo_location_id: str,
-        square_location_name: str,
-        combo_location_name: str,
-        sync_date: datetime,
-        status: str,
-        revenue_amount: Optional[float] = None,
-        error_message: Optional[str] = None,
-        square_response: Optional[str] = None,
-        combo_response: Optional[str] = None,
+        self, client_id: int, location: dict, target_date: date, result: dict
     ) -> SyncLog:
-        """
-        Create a sync log entry.
-
-        Args:
-            client_id: Client ID
-            square_location_id: Square Location ID
-            combo_location_id: Combo Location ID
-            square_location_name: Square Location Name
-            combo_location_name: Combo Location Name
-            sync_date: Date of the synced data
-            status: Sync status (success, failed, pending)
-            revenue_amount: Revenue amount synced
-            error_message: Error message if failed
-            square_response: Square API response
-            combo_response: Combo API response
-
-        Returns:
-            Created SyncLog object
-        """
-        logger.info(f"Creating sync log for client {client_id}, between Square location: {square_location_name} and Combo location: {combo_location_name}")
-        sync_log = SyncLog(
+        log = SyncLog(
             client_id=client_id,
-            square_location_id=square_location_id,
-            combo_location_id=combo_location_id,
-            square_location_name=square_location_name,
-            combo_location_name=combo_location_name,
-            sync_date=sync_date,
-            status=status,
-            revenue_amount=revenue_amount,
-            error_message=error_message,
-            square_response=square_response,
-            combo_response=combo_response,
+            **location,
+            sync_date=datetime.combine(target_date, time()),
+            status=result["status"],
+            revenue_amount=result.get("posted_revenue"),
+            error_message=result.get("error"),
         )
-        self.db.add(sync_log)
-        self.db.commit()
-        self.db.refresh(sync_log)
-        return sync_log
+        self.db.add(log)
+        try:
+            self.db.commit()
+            self.db.refresh(log)
+        except Exception:
+            self.db.rollback()
+            raise
+        return log

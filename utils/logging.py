@@ -1,88 +1,45 @@
-"""
-Logging configuration for the application.
-"""
+"""Rotating operational logs contain IDs/counts and sanitized error classes."""
 
-import logging
 import logging.config
-from pathlib import Path
 
-from .config import settings
+from utils.config import settings
 
 
 def setup_logging():
-    """Configure logging for the application."""
-
-    # Create logs directory if it doesn't exist
-    logs_dir = Path("logs")
-    logs_dir.mkdir(exist_ok=True)
-
-    logging_config = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "default": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
+    settings.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {"default": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+            "handlers": {
+                "console": {"class": "logging.StreamHandler", "formatter": "default"},
+                "file": {
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "formatter": "default",
+                    "filename": str(settings.LOG_DIR / "square_combo.log"),
+                    "maxBytes": 10485760,
+                    "backupCount": 5,
+                },
+                "sync": {
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "formatter": "default",
+                    "filename": str(settings.LOG_DIR / "sync.log"),
+                    "maxBytes": 10485760,
+                    "backupCount": 10,
+                },
             },
-            "detailed": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
+            "root": {"level": settings.LOG_LEVEL, "handlers": ["console", "file"]},
+            "loggers": {
+                "tasks.sync_revenue": {
+                    "level": settings.LOG_LEVEL,
+                    "handlers": ["console", "sync"],
+                    "propagate": False,
+                },
+                "httpx": {"level": "WARNING"},
+                "httpx2": {"level": "WARNING"},
+                "httpcore": {"level": "WARNING"},
+                "uvicorn.access": {"handlers": [], "propagate": False},
             },
-            "sync-format":{
-                "format": "%(asctime)s - %(levelname)s: %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            }
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "level": settings.LOG_LEVEL,
-                "formatter": "default",
-                "stream": "ext://sys.stdout",
-            },
-            "file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "level": settings.LOG_LEVEL,
-                "formatter": "detailed",
-                "filename": "logs/square_combo.log",
-                "maxBytes": 10485760,  # 10MB
-                "backupCount": 5,
-            },
-            "sync_file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "level": "INFO",
-                "formatter": "sync-format",
-                "filename": "logs/sync.log",
-                "maxBytes": 10485760,  # 10MB
-                "backupCount": 10,
-            },
-        },
-        "loggers": {
-            "": {  # Root logger
-                "level": settings.LOG_LEVEL,
-                "handlers": ["console", "file"],
-            },
-            "tasks.sync_revenue": {
-                "level": "INFO",
-                "handlers": ["sync_file"],
-                "propagate": False,
-            },
-            "adapters": {
-                "level": "INFO",
-                "handlers": ["file"],
-                "propagate": False,
-            },
-            "uvicorn": {
-                "level": "INFO",
-                "handlers": ["console"],
-                "propagate": False,
-            },
-            "httpx": {
-                "level": "WARNING",
-                "handlers": ["file"],
-                "propagate": False,
-            },
-        },
-    }
-
-    logging.config.dictConfig(logging_config)
+        }
+    )

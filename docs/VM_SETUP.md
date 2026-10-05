@@ -1,59 +1,73 @@
-## VM Setup
+# Linux deployment
 
-Manually created on Azure.
+The supplied profile uses Python 3.12+, SQLite, Nginx/TLS, a restricted `squarecombo` runtime/deployment account and `/srv/square-combo`. Change paths consistently if your installation differs. The web application never installs its own scheduler.
 
-### Install Python
+## Provisioning
 
-- $ sudo apt update
-- $ sudo apt install -y git python3 python3-venv python3-pip
+Install Git, Python with venv support, Nginx, certbot and util-linux (`flock`). Create the system account and shared directories:
 
-### Install Git
+```bash
+sudo useradd --system --create-home --home-dir /srv/square-combo --shell /bin/bash squarecombo
+sudo install -d -m 700 -o squarecombo -g squarecombo /srv/square-combo/shared /srv/square-combo/shared/logs /srv/square-combo/releases
+sudo install -m 600 -o squarecombo -g squarecombo env.example /srv/square-combo/shared/app.env
+```
 
-- $ sudo apt install git -y
+Edit `shared/app.env`: configure production Square credentials, `APP_URL=https://your-domain.example`, `SQUARE_ENVIRONMENT=production`, and these absolute shared paths:
 
-### Create Application Directory
+```dotenv
+DATABASE_URL=sqlite:////srv/square-combo/shared/square_combo.db
+LOG_DIR=/srv/square-combo/shared/logs
+SYNC_LOCK_PATH=/srv/square-combo/shared/sync.lock
+```
 
-- $ mkdir -p ~/apps/square-combo
+The deployment account needs an SSH key accepted by the VM and read access to the GitHub repository (public HTTPS after publication, or a read-only deploy key while private). Give it sudo permission **only** for stopping/restarting/checking `square-combo.service` and stopping/starting `square-combo-sync.timer`; do not grant general root shell access.
 
-### Create SSH Key for Git
+While the repository is private, initialize its checkout with a read-only SSH deploy key before the first deployment:
 
-- $ ssh-keygen -t rsa -b 4096 -C "deploy@square-combo”
+```bash
+sudo -u squarecombo git clone --no-checkout git@github.com:davaico/square-combo.git /srv/square-combo/repository
+```
 
-**→ Get the public key generated and save in GitHub deploy keys**
+Install the units under `/etc/systemd/system/` and reload systemd:
 
-### Clone the project into app directory
+```bash
+sudo install -m 644 deployment/square-combo.service deployment/square-combo-sync.service deployment/square-combo-sync.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable square-combo.service square-combo-sync.timer
+```
 
-- $ git clone [git@github.com](mailto:git@github.com):davaico/square-combo.git .
+Install `deployment/nginx.conf` in your Nginx HTTP context, replace the domain, verify with `sudo nginx -t`, and obtain a TLS certificate with certbot. The sample limits body size, throttles onboarding requests and suppresses query-bearing access logs. Test HTTPS before onboarding. Do not trust incoming forwarded headers from arbitrary peers.
 
-### Initialize Application
+Deploy a tested master commit, initially over the provisioned account's SSH connection:
 
-- $ python3 -m venv venv
-- $ source venv/bin/activate
-- $ pip install -r requirements.txt
+```bash
+ssh squarecombo@YOUR_VM bash -s -- TESTED_40_CHARACTER_COMMIT < deployment/deploy.sh
+```
 
-### Create service file for start / restart application
+The script serializes deployments, fetches master history, requires the requested SHA to belong to it, creates an immutable release with its own venv, checks configuration, stops the timer and locks out sync, backs up the SQLite database, applies additive schema initialization, switches `current`, restarts and verifies health. An installation, migration or restart failure fails deployment. Startup failure restores the previous release. On first-install failure there is no previous release to restore; correct the provisioning error and retry after removing the failed release directory.
 
-- $ sudo nano /etc/systemd/system/square-combo.service
-- $ sudo systemctl daemon-reload
-- $ sudo systemctl enable square-combo
+## GitHub deployment
 
-### Start Application
+The deployment workflow runs only after successful **push-to-master CI**, never after PR CI. Configure a protected `production` environment with `VM_HOST`, `VM_USER`, `VM_SSH_KEY` and `VM_SSH_HOST_KEY`. The host-key value must be an OpenSSH known-hosts line verified out of band, not an unverified `ssh-keyscan` result. Deploys are serialized and use the exact tested SHA.
 
-- $ sudo systemctl start square-combo
+Protect master with the CI checks and review requirements before publication. Configure an environment reviewer if appropriate for your deployment. Repo workflow files cannot establish those external policies.
 
-### Setup Nginx + Certificate
+## Existing-installation migration
 
-- $ sudo apt install -y nginx certbot python3-certbot-nginx
-- $ sudo nano /etc/nginx/sites-available/square-combo
-- $ sudo ln -s /etc/nginx/sites-available/square-combo /etc/nginx/sites-enabled/
-- $ sudo nginx -t
-- $ sudo systemctl restart nginx
-- $ sudo certbot --nginx -d [squarecombo.com](http://squarecombo.com/)
+Before merging/deploying this release:
 
-### Create .env file
+1. Stop the old cron entry, back up the existing database and capture the previous service configuration. Move the database into the protected shared directory without discarding merchant rows.
+2. Remove obsolete dotenv keys (`SQUARE_BASE_URL`, `COMBO_API_KEY`, `SYNC_TIME`, `SQUARE_ACCESS_TOKEN`, `SQUARE_APPLICATION_ID`), then use the supported configuration above. OAuth environment now controls both authorization and API reads.
+3. Check for duplicate `clients.square_merchant_id` rows. Resolve duplicates under operator control before initialization; creating the unique index intentionally fails rather than choosing one credential set. Empty Combo keys should be cleared to SQL NULL before fresh onboarding.
+4. Review stored expiry timestamps. Previous Square RFC3339 imports normally represent UTC; normalize any manually entered host-local values to UTC before the new UTC comparisons.
+5. Initialize with `SQUARE_COMBO_ENV_FILE=/srv/square-combo/shared/app.env python -m database` using the release venv. This adds setup sessions, explicit mappings and run records; existing client/sync-log columns remain compatible. Restrict database/backups to mode 600.
+6. Verify each location mapping. Old singleton name mismatches now require an explicit ID mapping or the explicit singleton policy. Disable inactive clients and rerun selected dates to correct old financial totals.
+7. Replace old service/cron configuration with the supplied units; verify `systemctl list-timers`, a test-account run and monitoring. Review access-log retention and restrict or retire old raw-order logs according to your retention policy.
 
-- $ nano /home/davaiadmin/apps/square-combo/.env
+## Backups and rollback
 
-### Create .db file
+The script makes a consistent SQLite `.pre-deploy.db` backup before schema initialization. Protect/encrypt that backup; it contains tokens. Arrange retained, off-host backups separately—this single local copy is not a backup policy.
 
-- $ /home/davaiadmin/apps/square-combo/venv/bin/python python -m database.__**init__**
+For a code rollback, stop the timer, wait for/acquire `shared/sync.lock`, repoint `current` to a known working release, restart the web service, check health and restart the timer. Do not restore a stale database while a task is running. Schema changes here are additive; a credential/schema data rollback requires a deliberate restore from a verified backup and reconciliation of any provider writes after the backup.
+
+Use `journalctl -u square-combo -u square-combo-sync` for process failures. The job's nonzero exit status and aggregate metrics distinguish failed synchronization from healthy HTTP liveness. Actual TLS, filesystem permissions, secret rotation and provider production access require operator verification; CI does not contact the production VM or accounts.

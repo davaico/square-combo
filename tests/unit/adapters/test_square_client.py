@@ -1,233 +1,186 @@
-"""
-Unit tests for SquareClient with mocked HTTP responses.
-"""
-
-import pytest
-import httpx
-import respx
+import json
 from datetime import date
-from typing import List, Dict, Any
+
+import httpx
+import pytest
+import respx
 
 from adapters.square.client import SquareClient
+from utils.config import settings
+
+BASE = "https://connect.squareupsandbox.com"
+DAY = date(2026, 1, 15)
 
 
-@pytest.mark.asyncio
-class TestSquareClientSearchOrders:
-    """Test cases for SquareClient.search_orders_by_date() method."""
+def order(id="sale", amount=900, **extra):
+    return {
+        "id": id,
+        "state": "COMPLETED",
+        "location_id": "sq",
+        "closed_at": "2026-01-15T10:00:00Z",
+        "total_money": {"amount": amount, "currency": "EUR"},
+        "total_discount_money": {"amount": 100, "currency": "EUR"},
+        **extra,
+    }
 
-    @respx.mock
-    async def test_search_orders_by_date_success(
-        self,
-        square_client: SquareClient,
-        mock_square_orders_response: List[Dict[str, Any]],
-    ):
-        """Test successful orders search for a specific date."""
-        # Mock the API response
-        mock_response = {"orders": mock_square_orders_response, "cursor": None}
-        respx.post("https://connect.squareupsandbox.com/v2/orders/search").mock(
-            return_value=httpx.Response(200, json=mock_response)
+
+def refund(id="refund", amount=200, **extra):
+    return {
+        "id": id,
+        "location_id": "sq",
+        "status": "COMPLETED",
+        "created_at": "2026-01-15T12:00:00Z",
+        "amount_money": {"amount": amount, "currency": "EUR"},
+        **extra,
+    }
+
+
+@respx.mock
+async def test_discount_is_not_subtracted_twice_and_order_returns_are_not_recounted(
+    square_client, caplog
+):
+    sale = order(
+        returns=[{"return_amounts": {"total_money": {"amount": 200}}}],
+        customer_id="PRIVATE_SENTINEL",
+    )
+    search = respx.post(f"{BASE}/v2/orders/search").mock(
+        return_value=httpx.Response(200, json={"orders": [sale]})
+    )
+    refunds = respx.get(f"{BASE}/v2/refunds").mock(
+        return_value=httpx.Response(200, json={"refunds": [refund()]})
+    )
+    caplog.set_level("DEBUG")
+    result = await square_client.get_daily_revenue("sq", DAY)
+    assert result["sales_amount"] == 900
+    assert result["net_sales_amount"] == 700
+    assert result["total_refunds"] == 200
+    assert result["refund_count"] == 1
+    assert search.call_count == refunds.call_count == 1
+    assert "PRIVATE_SENTINEL" not in caplog.text
+    body = json.loads(search.calls[0].request.content)
+    assert body["query"]["filter"]["date_time_filter"]["closed_at"] == {
+        "start_at": "2026-01-15T05:00:00+00:00",
+        "end_at": "2026-01-16T05:00:00+00:00",
+    }
+    assert body["query"]["filter"]["state_filter"] == {"states": ["COMPLETED"]}
+    assert refunds.calls[0].request.url.params["status"] == "COMPLETED"
+
+
+@respx.mock
+async def test_distinct_refund_events_deduplicate_pages_and_ignore_old_updated_returns(
+    square_client,
+):
+    respx.post(f"{BASE}/v2/orders/search").mock(
+        side_effect=[
+            httpx.Response(200, json={"orders": [order()], "cursor": "second"}),
+            httpx.Response(200, json={"orders": [order()]}),
+        ]
+    )
+    respx.get(f"{BASE}/v2/refunds").mock(
+        side_effect=[
+            httpx.Response(200, json={"refunds": [refund()], "cursor": "second"}),
+            httpx.Response(200, json={"refunds": [refund(), refund("new", 100)]}),
+        ]
+    )
+    result = await square_client.get_daily_revenue("sq", DAY)
+    assert result["order_count"] == 1
+    assert result["refund_count"] == 2
+    assert result["net_sales_amount"] == 600
+
+
+@respx.mock
+async def test_half_open_intervals_ignore_cancelled_foreign_and_noncompleted_refunds(square_client):
+    respx.post(f"{BASE}/v2/orders/search").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "orders": [
+                    order("cancelled", state="CANCELED"),
+                    order("foreign", location_id="other"),
+                    order("end", closed_at="2026-01-16T05:00:00Z"),
+                    order("start", closed_at="2026-01-15T05:00:00Z"),
+                ]
+            },
         )
-
-        # Call the method
-        target_date = date(2025, 8, 22)
-        result = await square_client.search_orders_by_date(
-            location_ids=["loc_456"], target_date=target_date
+    )
+    respx.get(f"{BASE}/v2/refunds").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "refunds": [
+                    refund("pending", status="PENDING"),
+                    refund("old", created_at="2026-01-14T12:00:00Z"),
+                    refund("foreign", location_id="other"),
+                ]
+            },
         )
+    )
+    assert (await square_client.get_daily_revenue("sq", DAY))["net_sales_amount"] == 900
 
-        # Assertions
-        assert isinstance(result, list)
-        assert len(result) == 2
-        assert result[0]["id"] == "order_123"
-        assert result[1]["id"] == "order_456"
 
-    @respx.mock
-    async def test_search_orders_by_date_empty_results(
-        self,
-        square_client: SquareClient,
-        mock_square_empty_orders: List[Dict[str, Any]],
-    ):
-        """Test orders search with no results."""
-        # Mock empty response
-        mock_response = {"orders": mock_square_empty_orders, "cursor": None}
-        respx.post("https://connect.squareupsandbox.com/v2/orders/search").mock(
-            return_value=httpx.Response(200, json=mock_response)
+@pytest.mark.parametrize("sales, refunds, expected", [([], [], 0), ([], [refund()], -200)])
+@respx.mock
+async def test_empty_and_refund_only_days(square_client, sales, refunds, expected):
+    respx.post(f"{BASE}/v2/orders/search").mock(
+        return_value=httpx.Response(200, json={"orders": sales})
+    )
+    respx.get(f"{BASE}/v2/refunds").mock(
+        return_value=httpx.Response(200, json={"refunds": refunds})
+    )
+    assert (await square_client.get_daily_revenue("sq", DAY))["net_sales_amount"] == expected
+
+
+@pytest.mark.parametrize(
+    "money",
+    [
+        {"amount": 10, "currency": "USD"},
+        {"amount": 1.2, "currency": "EUR"},
+        {"amount": True, "currency": "EUR"},
+        {"amount": -1, "currency": "EUR"},
+    ],
+)
+def test_reject_invalid_money(money):
+    with pytest.raises(ValueError):
+        SquareClient._money(money)
+
+
+@respx.mock
+async def test_repeated_cursor_and_page_cap_fail(square_client, monkeypatch):
+    route = respx.post(f"{BASE}/v2/orders/search").mock(
+        return_value=httpx.Response(200, json={"orders": [], "cursor": "same"})
+    )
+    with pytest.raises(ValueError, match="repeated"):
+        await square_client.search_orders_by_date(["sq"], DAY)
+    monkeypatch.setattr(settings, "MAX_API_PAGES", 1)
+    route.mock(return_value=httpx.Response(200, json={"orders": [], "cursor": "more"}))
+    with pytest.raises(ValueError, match="limit"):
+        await square_client.search_orders_by_date(["sq"], DAY)
+
+
+@respx.mock
+async def test_only_active_locations_and_merchant(square_client):
+    respx.get(f"{BASE}/v2/locations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "locations": [{"id": "yes", "status": "ACTIVE"}, {"id": "no", "status": "INACTIVE"}]
+            },
         )
+    )
+    respx.get(f"{BASE}/v2/merchants/m").mock(
+        return_value=httpx.Response(200, json={"merchant": {"business_name": "Cafe"}})
+    )
+    assert await square_client.get_locations() == [{"id": "yes", "status": "ACTIVE"}]
+    assert (await square_client.get_merchant_by_id("m"))["business_name"] == "Cafe"
 
-        # Call the method
-        target_date = date(2025, 8, 22)
-        result = await square_client.search_orders_by_date(
-            location_ids=["loc_456"], target_date=target_date
+
+def test_conflicting_duplicates_and_naive_timestamps():
+    from utils.dates import business_interval
+
+    start, end = business_interval(DAY)
+    with pytest.raises(ValueError, match="conflicting"):
+        SquareClient._unique_in_interval([order(), order(amount=1000)], "closed_at", start, end)
+    with pytest.raises(ValueError, match="timezone"):
+        SquareClient._unique_in_interval(
+            [order(closed_at="2026-01-15T12:00:00")], "closed_at", start, end
         )
-
-        # Assertions
-        assert isinstance(result, list)
-        assert len(result) == 0
-
-    @respx.mock
-    async def test_search_orders_correct_date_range(self, square_client: SquareClient):
-        """Test that correct date range is sent in request."""
-        # Mock the API response
-        mock_request = respx.post(
-            "https://connect.squareupsandbox.com/v2/orders/search"
-        ).mock(return_value=httpx.Response(200, json={"orders": [], "cursor": None}))
-
-        # Call the method
-        target_date = date(2025, 8, 22)
-        await square_client.search_orders_by_date(
-            location_ids=["loc_456"], target_date=target_date
-        )
-
-        # Check request body
-        assert mock_request.called
-        request_body = mock_request.calls[0].request.content.decode()
-
-        # Should contain French timezone date range (GMT+2)
-        assert (
-            "2025-08-21T22:00:00Z" in request_body
-        )  # Start of day in UTC (00:00 GMT+2)
-        assert (
-            "2025-08-22T21:59:59" in request_body
-        )  # End of day in UTC (23:59 GMT+2) - may have microseconds
-        assert "CLOSED_AT" in request_body
-        assert "loc_456" in request_body
-
-    @respx.mock
-    async def test_search_orders_with_updated_at_filter(
-        self, square_client: SquareClient
-    ):
-        """Test orders search with UPDATED_AT filter for refunds."""
-        # Mock the API response
-        mock_request = respx.post(
-            "https://connect.squareupsandbox.com/v2/orders/search"
-        ).mock(return_value=httpx.Response(200, json={"orders": [], "cursor": None}))
-
-        # Call the method with UPDATED_AT filter
-        target_date = date(2025, 8, 22)
-        await square_client.search_orders_by_date(
-            location_ids=["loc_456"], target_date=target_date, filter_field="UPDATED_AT"
-        )
-
-        # Check request body contains UPDATED_AT
-        request_body = mock_request.calls[0].request.content.decode()
-        assert "UPDATED_AT" in request_body
-
-    @respx.mock
-    async def test_search_orders_unauthorized_error(self, square_client: SquareClient):
-        """Test handling of 401 Unauthorized error."""
-        # Mock the API response
-        respx.post("https://connect.squareupsandbox.com/v2/orders/search").mock(
-            return_value=httpx.Response(
-                401, json={"errors": [{"code": "UNAUTHORIZED"}]}
-            )
-        )
-
-        # Call the method and expect exception
-        with pytest.raises(httpx.HTTPStatusError) as exc_info:
-            await square_client.search_orders_by_date(
-                location_ids=["loc_456"], target_date=date(2025, 8, 22)
-            )
-
-        assert exc_info.value.response.status_code == 401
-
-
-class TestSquareClientCalculateRevenue:
-    """Test cases for SquareClient.calculate_gross_revenue() method."""
-
-    def test_calculate_revenue_basic_orders(
-        self, mock_square_orders_response: List[Dict[str, Any]]
-    ):
-        """Test basic revenue calculation from orders."""
-        # Create client instance (no async needed for this method)
-        client = SquareClient("test_token", "test_app_id")
-
-        # Call the method
-        result = client.calculate_gross_revenue(mock_square_orders_response)
-
-        # Assertions
-        assert result["gross_sales_amount"] == 3700  # 2500 + 1200 cents
-        assert result["total_discounts"] == 300  # Only first order has discount
-        assert result["net_sales_amount"] == 3400  # 3700 - 300
-        assert result["order_count"] == 2
-        assert result["refund_count"] == 0
-        assert result["currency"] == "EUR"
-
-    def test_calculate_revenue_with_refunds(
-        self, mock_square_orders_with_refunds: List[Dict[str, Any]]
-    ):
-        """Test revenue calculation with refunds."""
-        client = SquareClient("test_token", "test_app_id")
-
-        # Call the method
-        result = client.calculate_gross_revenue(mock_square_orders_with_refunds)
-
-        # Assertions
-        assert result["gross_sales_amount"] == 2000  # Original order amount
-        assert result["total_refunds"] == 800  # Refund amount (positive)
-        assert result["net_sales_amount"] == 1200  # 2000 - 800
-        assert result["order_count"] == 1
-        assert result["refund_count"] == 1
-
-    def test_calculate_revenue_empty_orders(self):
-        """Test revenue calculation with empty orders list."""
-        client = SquareClient("test_token", "test_app_id")
-
-        # Call the method
-        result = client.calculate_gross_revenue([])
-
-        # Assertions
-        assert result["gross_sales_amount"] == 0
-        assert result["total_discounts"] == 0
-        assert result["total_refunds"] == 0
-        assert result["net_sales_amount"] == 0
-        assert result["order_count"] == 0
-        assert result["refund_count"] == 0
-
-
-@pytest.mark.asyncio
-class TestSquareClientGetDailyRevenue:
-    """Test cases for SquareClient.get_daily_revenue() integration method."""
-
-    @respx.mock
-    async def test_get_daily_revenue_success(
-        self,
-        square_client: SquareClient,
-        mock_square_orders_response: List[Dict[str, Any]],
-    ):
-        """Test complete daily revenue calculation."""
-        # Mock both API calls (new sales and refunds)
-        mock_response = {"orders": mock_square_orders_response, "cursor": None}
-
-        # Mock new sales call (CLOSED_AT)
-        respx.post("https://connect.squareupsandbox.com/v2/orders/search").mock(
-            return_value=httpx.Response(200, json=mock_response)
-        )
-
-        # Call the method
-        target_date = date(2025, 8, 22)
-        result = await square_client.get_daily_revenue("loc_456", target_date)
-
-        # Assertions
-        assert result is not None
-        assert result["location_id"] == "loc_456"
-        assert result["date"] == "2025-08-22"
-        assert result["gross_sales_amount"] == 3700
-        assert result["net_sales_amount"] == 3400
-        assert result["currency"] == "EUR"
-
-    @respx.mock
-    async def test_get_daily_revenue_no_orders(self, square_client: SquareClient):
-        """Test daily revenue with no orders."""
-        # Mock empty response
-        mock_response = {"orders": [], "cursor": None}
-        respx.post("https://connect.squareupsandbox.com/v2/orders/search").mock(
-            return_value=httpx.Response(200, json=mock_response)
-        )
-
-        # Call the method
-        target_date = date(2025, 8, 22)
-        result = await square_client.get_daily_revenue("loc_456", target_date)
-
-        # Assertions
-        assert result is not None
-        assert result["net_sales_amount"] == 0
-        assert result["order_count"] == 0

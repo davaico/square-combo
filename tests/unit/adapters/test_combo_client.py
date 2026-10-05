@@ -2,10 +2,11 @@
 Unit tests for ComboClient with mocked HTTP responses.
 """
 
-import pytest
+from typing import Any
+
 import httpx
+import pytest
 import respx
-from typing import List, Dict, Any
 
 from adapters.combo.client import ComboClient
 
@@ -16,7 +17,7 @@ class TestComboClientGetLocations:
 
     @respx.mock
     async def test_get_locations_success_with_teams(
-        self, combo_client: ComboClient, mock_locations_response: List[Dict[str, Any]]
+        self, combo_client: ComboClient, mock_locations_response: list[dict[str, Any]]
     ):
         """Test successful API call returning locations with teams."""
         # Mock the API response
@@ -52,7 +53,7 @@ class TestComboClientGetLocations:
     async def test_get_locations_success_empty_list(
         self,
         combo_client: ComboClient,
-        mock_empty_locations_response: List[Dict[str, Any]],
+        mock_empty_locations_response: list[dict[str, Any]],
     ):
         """Test successful API call returning empty locations list."""
         # Mock the API response
@@ -189,9 +190,7 @@ class TestComboClientPostRevenue:
         respx.post("https://partner.combohr.com/api/v1/revenues").mock(
             return_value=httpx.Response(
                 422,
-                json={
-                    "error": "At least one of 'amount' or 'estimated amount' must be present"
-                },
+                json={"error": "At least one of 'amount' or 'estimated amount' must be present"},
             )
         )
 

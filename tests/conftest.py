@@ -1,60 +1,121 @@
-"""
-Pytest configuration and shared fixtures.
-"""
+"""Deterministic tests never load production dotenv files or provider credentials."""
 
-import pytest
-import pytest_asyncio
 import os
-import logging
-from typing import Dict, Any, List
-from adapters.combo.client import ComboClient
-from adapters.square.client import SquareClient
-from dotenv import load_dotenv
-from utils.config import Settings
+import socket
+from datetime import datetime
 
-
-# Load environment variables
-load_dotenv()
-
-# Configure logging for tests
-logging.basicConfig(
-    # level=logging.DEBUG,
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+# Settings are imported only after safe defaults are in place. No load_dotenv here.
+os.environ["SQUARE_COMBO_ENV_FILE"] = os.devnull
+os.environ.update(
+    {
+        "APP_URL": "http://localhost:8000",
+        "SQUARE_ENVIRONMENT": "sandbox",
+        "SQUARE_CLIENT_ID": "test-app",
+        "SQUARE_CLIENT_SECRET": "test-secret",
+        "DATABASE_URL": "sqlite:///:memory:",
+        "HTTP_RETRIES": "0",
+    }
 )
 
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-@pytest.fixture
-def test_settings():
-    """Test settings with overrides for testing environment."""
-    return Settings(
-        COMBO_API_KEY=os.getenv("COMBO_API_KEY", "test_api_key"),
-        COMBO_BASE_URL=os.getenv("COMBO_BASE_URL", "https://partner.combohr.com"),
-        SQUARE_ACCESS_TOKEN=os.getenv("SQUARE_ACCESS_TOKEN", "test_square_token"),
-        SQUARE_APPLICATION_ID=os.getenv("SQUARE_APPLICATION_ID", "test_app_id"),
-        SQUARE_ENVIRONMENT=os.getenv("SQUARE_ENVIRONMENT", "sandbox"),
-        LOG_LEVEL="DEBUG",
+from adapters.combo.client import ComboClient
+from adapters.square.client import SquareClient
+from database.database import Base, get_db
+from database.models import Client
+from main import app
+from utils.config import settings
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-live",
+        action="store_true",
+        help="Run read-only provider tests using dedicated test credentials",
     )
 
 
-# ---------------------
-# Combo client fixtures
-# ---------------------
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if item.get_closest_marker("live") and not config.getoption("--run-live"):
+            item.add_marker(
+                pytest.mark.skip(reason="Use --run-live for dedicated read-only provider checks")
+            )
 
 
-@pytest_asyncio.fixture
-async def combo_client(test_settings):
-    """Create a ComboClient instance for testing."""
-    client = ComboClient(api_key=test_settings.COMBO_API_KEY)
-    try:
-        yield client
-    finally:
-        await client.close()
+@pytest.fixture(autouse=True)
+def no_network(request, monkeypatch):
+    if request.node.get_closest_marker("live"):
+        return
+
+    def blocked(*args, **kwargs):
+        raise AssertionError("Network is disabled in the default test suite")
+
+    monkeypatch.setattr(socket.socket, "connect", blocked)
+    # Prevent developer .env files from affecting test configuration.
+    monkeypatch.setattr(settings, "HTTP_RETRIES", 0)
 
 
 @pytest.fixture
-def mock_locations_response() -> List[Dict[str, Any]]:
-    """Mock response for successful get_locations API call with teams."""
+async def combo_client():
+    async with ComboClient("test_combo_key") as client:
+        yield client
+
+
+@pytest.fixture
+async def square_client():
+    async with SquareClient("test_square_key") as client:
+        yield client
+
+
+@pytest.fixture
+def session_factory(monkeypatch):
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    import tasks.manage as manage
+    import tasks.sync_revenue as task
+
+    monkeypatch.setattr(task, "SessionLocal", factory)
+    monkeypatch.setattr(manage, "SessionLocal", factory)
+
+    def dependency():
+        with factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = dependency
+    yield factory
+    app.dependency_overrides.clear()
+    engine.dispose()
+
+
+@pytest.fixture
+def db(session_factory):
+    with session_factory() as session:
+        yield session
+
+
+@pytest.fixture
+def client_record(db):
+    client = Client(
+        name="Cafe",
+        square_merchant_id="merchant-1",
+        square_access_token="old-token",
+        square_refresh_token="old-refresh",
+        square_access_token_expiry_date=datetime(2099, 1, 1),
+    )
+    db.add(client)
+    db.commit()
+    return client
+
+
+@pytest.fixture
+def mock_locations_response():
     return [
         {
             "id": "loc_123",
@@ -81,161 +142,5 @@ def mock_locations_response() -> List[Dict[str, Any]]:
 
 
 @pytest.fixture
-def mock_empty_locations_response() -> List[Dict[str, Any]]:
-    """Mock response for empty locations list."""
+def mock_empty_locations_response():
     return []
-
-
-@pytest.fixture
-def mock_single_location_response() -> List[Dict[str, Any]]:
-    """Mock response for single location without teams."""
-    return [
-        {
-            "id": "loc_789",
-            "name": "Single Location",
-            "account_id": "acc_456",
-            "partner_id": "partner_789",
-            "snapshift_account_id": 101,
-            "snapshift_location_id": 203,
-            "teams": [],
-        }
-    ]
-
-
-# ---------------------
-# Square client fixtures
-# ---------------------
-
-
-@pytest_asyncio.fixture
-async def square_client(test_settings, request):
-    """Create a SquareClient instance for testing."""
-    # Use production environment for integration tests, sandbox for unit tests
-    environment = "production" if "integration" in request.node.nodeid else "sandbox"
-
-    client = SquareClient(
-        access_token=test_settings.SQUARE_ACCESS_TOKEN,
-        application_id=test_settings.SQUARE_APPLICATION_ID,
-        environment=environment,
-    )
-    try:
-        yield client
-    finally:
-        await client.close()
-
-
-@pytest.fixture
-def mock_square_orders_response() -> List[Dict[str, Any]]:
-    """Mock response for successful Square orders search."""
-    return [
-        {
-            "id": "order_123",
-            "location_id": "loc_456",
-            "state": "COMPLETED",
-            "created_at": "2025-08-22T10:30:00Z",
-            "updated_at": "2025-08-22T10:35:00Z",
-            "closed_at": "2025-08-22T10:35:00Z",
-            "net_amounts": {
-                "total_money": {"amount": 2500, "currency": "EUR"},  # $25.00 in cents
-                "tax_money": {"amount": 200, "currency": "EUR"},  # $2.00 tax
-                "discount_money": {"amount": 300, "currency": "EUR"},  # $3.00 discount
-            },
-            "total_money": {"amount": 2500, "currency": "EUR"},
-            "total_tax_money": {"amount": 200, "currency": "EUR"},
-            "total_discount_money": {"amount": 300, "currency": "EUR"},
-            "line_items": [
-                {
-                    "uid": "item_1",
-                    "name": "Coffee",
-                    "quantity": "2",
-                    "total_money": {"amount": 1600, "currency": "EUR"},
-                    "total_discount_money": {"amount": 200, "currency": "EUR"},
-                },
-                {
-                    "uid": "item_2",
-                    "name": "Pastry",
-                    "quantity": "1",
-                    "total_money": {"amount": 900, "currency": "EUR"},
-                    "total_discount_money": {"amount": 100, "currency": "EUR"},
-                },
-            ],
-        },
-        {
-            "id": "order_456",
-            "location_id": "loc_456",
-            "state": "COMPLETED",
-            "created_at": "2025-08-22T14:15:00Z",
-            "updated_at": "2025-08-22T14:20:00Z",
-            "closed_at": "2025-08-22T14:20:00Z",
-            "net_amounts": {
-                "total_money": {"amount": 1200, "currency": "EUR"}  # $12.00
-            },
-            "total_money": {"amount": 1200, "currency": "EUR"},
-            "total_tax_money": {"amount": 100, "currency": "EUR"},
-            "line_items": [
-                {
-                    "uid": "item_3",
-                    "name": "Sandwich",
-                    "quantity": "1",
-                    "total_money": {"amount": 1200, "currency": "EUR"},
-                }
-            ],
-        },
-    ]
-
-
-@pytest.fixture
-def mock_square_orders_with_refunds() -> List[Dict[str, Any]]:
-    """Mock response for Square orders with refunds."""
-    return [
-        {
-            "id": "order_789",
-            "location_id": "loc_456",
-            "state": "COMPLETED",
-            "created_at": "2025-08-21T16:00:00Z",
-            "updated_at": "2025-08-22T11:00:00Z",  # Updated today due to refund
-            "closed_at": "2025-08-21T16:05:00Z",
-            "total_money": {"amount": 2000, "currency": "EUR"},
-            "returns": [
-                {
-                    "uid": "return_1",
-                    "created_at": "2025-08-22T11:00:00Z",  # Refund processed today
-                    "return_line_items": [
-                        {
-                            "uid": "return_item_1",
-                            "name": "Coffee",
-                            "quantity": "1",
-                            "total_money": {
-                                "amount": -800,  # Negative for refund
-                                "currency": "EUR",
-                            },
-                        }
-                    ],
-                    "return_amounts": {
-                        "total_money": {"amount": -800, "currency": "EUR"}
-                    },
-                }
-            ],
-        }
-    ]
-
-
-@pytest.fixture
-def mock_square_empty_orders() -> List[Dict[str, Any]]:
-    """Mock response for empty orders list."""
-    return []
-
-
-@pytest.fixture
-def mock_square_search_response() -> Dict[str, Any]:
-    """Mock response wrapper for Square orders search API."""
-    return {"orders": [], "cursor": None}  # Will be populated by specific test
-
-
-@pytest.fixture
-def mock_square_paginated_response() -> Dict[str, Any]:
-    """Mock response with pagination cursor."""
-    return {
-        "orders": [],  # Will be populated by specific test
-        "cursor": "next_page_cursor_123",
-    }

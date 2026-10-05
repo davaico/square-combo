@@ -1,316 +1,151 @@
-"""
-Square API client adapter.
-"""
+"""Square completed-order totals minus dated, completed payment refunds."""
 
 import logging
-from datetime import datetime, date, time, timezone, timedelta
-from typing import List, Dict, Any, Optional
+from datetime import date, datetime
+
 import httpx
 
 from utils.config import settings
+from utils.dates import business_interval
+from utils.http import request_json
 
 logger = logging.getLogger(__name__)
 
 
 class SquareClient:
-    """Client for interacting with Square API."""
-
-    def __init__(self, access_token: str, environment: str = None):
-        self.access_token = access_token
-        self.environment = environment or settings.SQUARE_ENVIRONMENT
-        self.base_url = self._get_base_url()
+    def __init__(self, access_token: str):
         self.client = httpx.AsyncClient(
-            base_url=self.base_url,
+            base_url=settings.square_base_url,
+            timeout=settings.HTTP_TIMEOUT_SECONDS,
             headers={
-                "Authorization": f"Bearer {self.access_token}",
-                "Square-Version": "2025-08-20",  # TODO: move to settings
-                "Content-Type": "application/json",
+                "Authorization": f"Bearer {access_token}",
+                "Square-Version": settings.SQUARE_API_VERSION,
             },
         )
 
-    def _get_base_url(self) -> str:
-        """Get base URL based on environment."""
-        if self.environment == "production":
-            return "https://connect.squareup.com"
-        else:
-            return "https://connect.squareupsandbox.com"
+    async def __aenter__(self):
+        return self
 
-    async def search_orders_by_date(
-        self,
-        location_ids: List[str],
-        target_date: date,
-        filter_field: str = "CLOSED_AT",
-    ) -> List[Dict[str, Any]]:
-        """
-        Search for orders on a specific date using Square Orders API.
-
-        Args:
-            location_ids: List of Square location IDs
-            target_date: Date to search for orders
-            filter_field: Field to filter by ("CLOSED_AT" or "UPDATED_AT")
-
-        Returns:
-            List of order dictionaries from Square API
-
-        Raises:
-            httpx.HTTPStatusError: If API returns error status code
-        """
-        logger.info(f"Searching orders for {target_date} at locations {location_ids}")
-
-        # Convert target_date to French timezone (GMT+2) date range
-        # TODO: move to settings
-        french_tz = timezone(timedelta(hours=2))
-
-        # Start: target_date at 6am in French timezone, converted to UTC
-        start_french = datetime.combine(target_date, time(6, 0, 0)).replace(tzinfo=french_tz)
-        start_utc = start_french.astimezone(timezone.utc)
-
-        # End: next day at 6am in French timezone, converted to UTC
-        next_day = target_date + timedelta(days=1)
-        end_french = datetime.combine(next_day, time(6, 0, 0)).replace(tzinfo=french_tz)
-        end_utc = end_french.astimezone(timezone.utc)
-
-        # Prepare request body
-        # Map filter field to the correct API key
-        filter_key = filter_field.lower().replace("_", "_")  # "CLOSED_AT" -> "closed_at"
-
-        logger.info(f"Filter key: {filter_key}")
-        logger.info(f"Start UTC: {start_utc}")
-        logger.info(f"End UTC: {end_utc}")
-
-        request_body = {
-            "location_ids": location_ids,
-            "query": {
-                "filter": {
-                    "date_time_filter": {
-                        filter_key: {
-                            "start_at": start_utc.isoformat().replace("+00:00", "Z"),
-                            "end_at": end_utc.isoformat().replace("+00:00", "Z"),
-                        }
-                    }
-                }
-            },
-            "limit": 500,  # Maximum allowed by Square API
-        }
-
-        all_orders = []
-        cursor = None
-
-        try:
-            while True:
-                if cursor:
-                    request_body["cursor"] = cursor
-
-                response = await self.client.post(
-                    "/v2/orders/search", json=request_body
-                )
-                response.raise_for_status()
-
-                data = response.json()
-                orders = data.get("orders", [])
-                all_orders.extend(orders)
-
-                cursor = data.get("cursor")
-                if not cursor:
-                    break
-
-                logger.info(f"Retrieved {len(orders)} orders, continuing with cursor")
-
-            logger.info(
-                f"Successfully retrieved {len(all_orders)} orders for {target_date}"
-            )
-
-            logger.info(f"All orders: {all_orders}")
-            return all_orders
-
-        except Exception as e:
-            logger.error(f"Failed to search orders: {str(e)}")
-            raise
-
-    def calculate_gross_revenue(self, orders: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Calculate gross revenue from a list of Square orders.
-
-        Args:
-            orders: List of Square order dictionaries
-
-        Returns:
-            Dictionary containing revenue breakdown:
-            - gross_sales_amount: Total gross sales in cents
-            - total_discounts: Total discounts in cents
-            - total_refunds: Total refunds in cents
-            - net_sales_amount: Net sales after discounts and refunds in cents
-            - order_count: Number of orders processed
-            - refund_count: Number of refunds processed
-            - currency: Currency code (e.g., "EUR")
-        """
-        logger.info(f"Calculating revenue for {len(orders)} orders")
-
-        if not orders:
-            return {
-                "gross_sales_amount": 0,
-                "total_discounts": 0,
-                "total_refunds": 0,
-                "net_sales_amount": 0,
-                "order_count": 0,
-                "refund_count": 0,
-                "currency": "EUR",  # Default currency
-            }
-
-        gross_sales = 0
-        total_discounts = 0
-        total_refunds = 0
-        refund_count = 0
-        currency = "EUR"  # Default, will be overridden by first order
-
-        for order in orders:
-            # Get currency from first order
-            if order.get("total_money", {}).get("currency"):
-                currency = order["total_money"]["currency"]
-
-            # Add gross sales (total order amount)
-            order_total = order.get("total_money", {}).get("amount", 0)
-            gross_sales += order_total
-
-            # Add discounts
-            order_discounts = order.get("total_discount_money", {}).get("amount", 0)
-            total_discounts += order_discounts
-
-            # Process refunds/returns
-            returns = order.get("returns", [])
-            for return_item in returns:
-                refund_count += 1
-                return_amount = (
-                    return_item.get("return_amounts", {})
-                    .get("total_money", {})
-                    .get("amount", 0)
-                )
-                # Return amounts are negative in Square API, make them positive for our calculation
-                total_refunds += abs(return_amount)
-
-        net_sales = gross_sales - total_discounts - total_refunds
-
-        result = {
-            "gross_sales_amount": gross_sales,
-            "total_discounts": total_discounts,
-            "total_refunds": total_refunds,
-            "net_sales_amount": net_sales,
-            "order_count": len(orders),
-            "refund_count": refund_count,
-            "currency": currency,
-        }
-
-        logger.info(f"Revenue calculation complete: {result}")
-        return result
-
-    async def get_daily_revenue(
-        self, location_id: str, target_date: date
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Fetch daily revenue for a specific location and date.
-
-        Combines new sales (CLOSED_AT) and refund data (UPDATED_AT) to calculate
-        net daily revenue according to Square's methodology.
-
-        Args:
-            location_id: Square location ID
-            target_date: Date to fetch revenue for
-
-        Returns:
-            Revenue data dictionary with structure:
-            - location_id: str
-            - date: str (YYYY-MM-DD format)
-            - gross_sales_amount: int (cents)
-            - total_discounts: int (cents)
-            - total_refunds: int (cents)
-            - net_sales_amount: int (cents)
-            - order_count: int
-            - refund_count: int
-            - currency: str
-        """
-        logger.info(f"Fetching revenue for location {location_id} on {target_date}")
-
-        try:
-            # Step 1: Fetch new sales (orders closed on this date)
-            logger.info("Fetching new sales (CLOSED_AT)")
-            new_sales_orders = await self.search_orders_by_date(
-                location_ids=[location_id],
-                target_date=target_date,
-                filter_field="CLOSED_AT",
-            )
-
-            # Step 2: Fetch refunds (orders updated on this date due to returns)
-            logger.info("Fetching refunds (UPDATED_AT)")
-            refund_orders = await self.search_orders_by_date(
-                location_ids=[location_id],
-                target_date=target_date,
-                filter_field="UPDATED_AT",
-            )
-
-            # Step 3: Calculate revenue from new sales
-            new_sales_revenue = self.calculate_gross_revenue(new_sales_orders)
-
-            # Step 4: Calculate refunds from updated orders
-            refund_revenue = self.calculate_gross_revenue(refund_orders)
-
-            # Step 5: Combine the results
-            total_gross_sales = new_sales_revenue["gross_sales_amount"]
-            total_discounts = new_sales_revenue["total_discounts"]
-            total_refunds = (
-                new_sales_revenue["total_refunds"] + refund_revenue["total_refunds"]
-            )
-
-            net_sales = total_gross_sales - total_discounts - total_refunds
-
-            result = {
-                "location_id": location_id,
-                "date": target_date.strftime("%Y-%m-%d"),
-                "gross_sales_amount": total_gross_sales,
-                "total_discounts": total_discounts,
-                "total_refunds": total_refunds,
-                "net_sales_amount": net_sales,
-                "order_count": new_sales_revenue["order_count"],
-                "refund_count": new_sales_revenue["refund_count"]
-                + refund_revenue["refund_count"],
-                "currency": new_sales_revenue.get("currency", "EUR"),
-            }
-
-            logger.info(
-                f"Daily revenue calculation complete: net_sales={net_sales} {result['currency']}"
-            )
-            return result
-
-        except Exception as e:
-            logger.error(f"Failed to calculate daily revenue: {str(e)}")
-            raise
-
-    async def get_locations(self) -> List[Dict[str, Any]]:
-        """
-        Fetch all locations for the authenticated merchant.
-        Returns:
-            List of location dictionaries
-        """
-        logger.info("Fetching locations from Square API")
-        try:
-            response = await self.client.get("/v2/locations")
-            response.raise_for_status()
-            data = response.json()
-            return data.get("locations", [])
-        except Exception as e:
-            logger.error(f"Failed to fetch locations from Square: {str(e)}")
-            raise
-
-    async def get_merchant_by_id(self, merchant_id: str) -> Dict[str, Any]:
-        logger.info("Fetching merchant info from Square API")
-        try:
-            response = await self.client.get(f"/v2/merchants/{merchant_id}")
-            response.raise_for_status()
-            data = response.json()
-            return data.get("merchant", {})
-        except Exception as e:
-            logger.error(f"Failed to fetch locations from Square: {str(e)}")
-            raise
+    async def __aexit__(self, *_):
+        await self.close()
 
     async def close(self):
-        """Close the HTTP client."""
         await self.client.aclose()
+
+    async def _pages(
+        self, method: str, path: str, key: str, *, body=None, params=None
+    ) -> list[dict]:
+        records = []
+        seen = set()
+        for _ in range(settings.MAX_API_PAGES):
+            data = await request_json(self.client, method, path, json=body, params=params)
+            records.extend(data.get(key, []))
+            cursor = data.get("cursor")
+            if not cursor:
+                return records
+            if cursor in seen:
+                raise ValueError("Provider repeated a pagination cursor")
+            seen.add(cursor)
+            if body is not None:
+                body = {**body, "cursor": cursor}
+            else:
+                params = {**(params or {}), "cursor": cursor}
+        raise ValueError("Provider exceeded pagination limit")
+
+    async def search_orders_by_date(self, location_ids: list[str], target_date: date) -> list[dict]:
+        start, end = business_interval(target_date)
+        orders = await self._pages(
+            "POST",
+            "/v2/orders/search",
+            "orders",
+            body={
+                "location_ids": location_ids,
+                "query": {
+                    "filter": {
+                        "date_time_filter": {
+                            "closed_at": {"start_at": start.isoformat(), "end_at": end.isoformat()}
+                        },
+                        "state_filter": {"states": ["COMPLETED"]},
+                    }
+                },
+                "limit": 500,
+            },
+        )
+        # Apply a half-open interval locally too: adjacent days must never overlap.
+        result = self._unique_in_interval(orders, "closed_at", start, end)
+        logger.info("Retrieved %d completed orders", len(result))
+        return result
+
+    @staticmethod
+    def _unique_in_interval(
+        records: list[dict], timestamp: str, start: datetime, end: datetime
+    ) -> list[dict]:
+        result = {}
+        for record in records:
+            moment = datetime.fromisoformat(record[timestamp].replace("Z", "+00:00"))
+            if moment.tzinfo is None:
+                raise ValueError("Provider timestamp has no timezone")
+            if start <= moment < end:
+                if record["id"] in result and record != result[record["id"]]:
+                    raise ValueError("Provider returned conflicting duplicate records")
+                result[record["id"]] = record
+        return list(result.values())
+
+    async def get_refunds_by_date(self, location_id: str, target_date: date) -> list[dict]:
+        start, end = business_interval(target_date)
+        refunds = await self._pages(
+            "GET",
+            "/v2/refunds",
+            "refunds",
+            params={
+                "location_id": location_id,
+                "begin_time": start.isoformat(),
+                "end_time": end.isoformat(),
+                "status": "COMPLETED",
+                "limit": 100,
+            },
+        )
+        return self._unique_in_interval(refunds, "created_at", start, end)
+
+    @staticmethod
+    def _money(money: dict) -> int:
+        if money["currency"] != settings.REVENUE_CURRENCY:
+            raise ValueError("Provider currency differs from configured revenue currency")
+        amount = money["amount"]
+        if not isinstance(amount, int) or isinstance(amount, bool) or amount < 0:
+            raise ValueError("Provider amount must be nonnegative integer minor units")
+        return amount
+
+    async def get_daily_revenue(self, location_id: str, target_date: date) -> dict:
+        orders = await self.search_orders_by_date([location_id], target_date)
+        refunds = await self.get_refunds_by_date(location_id, target_date)
+        sales = sum(
+            self._money(order["total_money"])
+            for order in orders
+            if order["state"] == "COMPLETED" and order["location_id"] == location_id
+        )
+        returned = sum(
+            self._money(refund["amount_money"])
+            for refund in refunds
+            if refund["status"] == "COMPLETED" and refund["location_id"] == location_id
+        )
+        return {
+            "location_id": location_id,
+            "date": target_date.isoformat(),
+            "sales_amount": sales,
+            "total_refunds": returned,
+            "net_sales_amount": sales - returned,
+            "order_count": len(orders),
+            "refund_count": len(refunds),
+            "currency": settings.REVENUE_CURRENCY,
+        }
+
+    async def get_locations(self) -> list[dict]:
+        data = await request_json(self.client, "GET", "/v2/locations")
+        return [
+            location for location in data.get("locations", []) if location.get("status") == "ACTIVE"
+        ]
+
+    async def get_merchant_by_id(self, merchant_id: str) -> dict:
+        data = await request_json(self.client, "GET", f"/v2/merchants/{merchant_id}")
+        return data["merchant"]

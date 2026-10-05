@@ -1,46 +1,42 @@
-name: Deploy to VM
-
+name: Deploy tested master
 on:
-  push:
-    branches:
-      - master
-
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+permissions:
+  contents: read
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 jobs:
   deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-
+    environment: production
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Deploy to VM via SSH
-        uses: appleboy/ssh-action@v0.1.10
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            APP_DIR=/home/${{ secrets.VM_USER }}/apps/square-combo
-            VENV_DIR=$APP_DIR/venv
-
-            mkdir -p $APP_DIR
-
-            if [ ! -d "$APP_DIR/.git" ]; then
-              git clone git@github.com:davaico/square-combo.git . $APP_DIR
-            else
-              cd $APP_DIR
-              git fetch origin master
-              git reset --hard origin/master
-            fi
-
-            if [ ! -d "$VENV_DIR" ]; then
-              python3 -m venv $VENV_DIR
-            fi
-
-            source $VENV_DIR/bin/activate
-
-            pip install --upgrade pip
-            pip install -r $APP_DIR/requirements.txt
-
-            sudo systemctl restart square-combo || \
-              (echo "Service not found, please create /etc/systemd/system/square-combo.service")
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Deploy exact tested commit over verified SSH
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_HOST_KEY: ${{ secrets.VM_SSH_HOST_KEY }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_HOST" && test -n "$VM_USER" && test -n "$VM_SSH_KEY" && test -n "$VM_SSH_HOST_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$VM_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts' EXIT
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$VM_USER@$VM_HOST" bash -s -- "$DEPLOY_SHA" < deployment/deploy.sh

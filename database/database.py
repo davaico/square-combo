@@ -3,24 +3,23 @@ Database connection and session management.
 """
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from utils.config import settings
 
 # Create database engine
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args=(
-        {"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
-    ),
+    connect_args=({"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}),
 )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 # Create base class for models
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 
 def get_db():
@@ -38,3 +37,5 @@ def init_db():
     from . import models  # noqa
 
     Base.metadata.create_all(bind=engine)
+    # create_all does not add new indexes to tables from older releases.
+    models.merchant_index.create(bind=engine, checkfirst=True)

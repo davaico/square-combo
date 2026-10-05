@@ -1,76 +1,16 @@
-## Grafana Setup
+# Monitoring
 
-### Prerequisites
-- Register Grafana Cloud account at https://grafana.com/signup/cloud
-- Go to portal -> Add new connection -> Choose which to integrate (etc. Linux server)
-  -> Follow instructions to install Alloy service
+The application exposes Prometheus text metrics at `/metrics`. Scrape it over loopback with the configured public Host header, or through a restricted proxy route. `/health` is only process/database liveness.
 
-### Setup VM metrics (CPU, Memory...)
-- After installing Alloy by following the instructions, start the Alloy service
-  and test your connection in Grafana Cloud portal.
-- Click install dashboard at the last step of instructions to import VM
-  monitoring dashboard.
+Useful alerts:
 
-### Setup application health metric
-- Open config.alloy file as administrator, create prometheus scrape component 
-  to get application health metric.
-- Example config.alloy file:
+- `sync_last_run_success == 0`: the latest business-date run failed, is still running, or no run exists.
+- `time() - sync_last_success_timestamp_seconds > 90000`: no successful date reconciliation within 25 hours. A zero timestamp means no success has been recorded.
+- `sync_failed_runs_last_24h > 0`: at least one business-date run failed. Historical failures remain in this rolling count even after a successful rerun; inspect the task's exit status/logs and rerun the affected dates.
+- A failed `square-combo-sync.service` or missed systemd timer invocation.
 
-```
-prometheus.relabel "app_health" {
-  forward_to = [prometheus.remote_write.metrics_service.receiver]
+A multi-date reconciliation returns failure if any date fails. One successful later date does not erase another date's failure; use both metrics and the service outcome. A successful run with no active merchants is valid but does not prove configured merchant coverage—verify activation and mappings during provisioning.
 
-  rule {
-    target_label = "job"
-    replacement  = "app_health"
-  }
+With Grafana Alloy, configure `prometheus.scrape` to use `/metrics`, include the configured Host header and forward to your private remote-write receiver. Follow Grafana's current installation instructions for credentials; do not commit them here.
 
-  rule {
-    target_label = "instance"
-    replacement  = constants.hostname
-  }
-}
-
-prometheus.scrape "app_health" {
-  targets = [
-    {
-      __address__ = "<your application host>",
-    },
-  ]
-
-  metrics_path = "/health"
-
-  forward_to = [prometheus.relabel.app_health.receiver]
-}
-```
-- Restart Alloy service
-- Check health metric in Grafana Explore section and import to new dashboard
-
-### Setup cronjob sync logs
-- Open config.alloy file as administrator, create loki process to get logs from sync.log file.
-- Example config.alloy file:
-
-```
-loki.source.file "square_combo_sync" {
-  targets = [
-    {
-      __path__ = "/home/davaiadmin/apps/square-combo/logs/sync.log",
-      job      = "square_combo_sync",
-    },
-  ]
-
-  forward_to = [loki.process.square_combo_sync.receiver]
-}
-
-loki.process "square_combo_sync" {
-  forward_to = [loki.write.grafana_cloud_loki.receiver]
-
-  stage.labels {
-    values = {
-      service_name = "square_combo_sync",
-    }
-  }
-}
-```
-- Restart Alloy service
-- Check sync logs in Grafana Explore section and import to new dashboard
+Optional log collection should read the absolute protected `LOG_DIR/sync.log` path from your deployment, with access limited to operators. Logs contain aggregate operational data and sanitized error classes. Set retention appropriate to business confidentiality and remove raw provider responses from any old installation's logging pipeline. General logs rotate at 10 MB/five backups, sync logs at 10 MB/ten backups; journald and remote retention are separate operator settings.
