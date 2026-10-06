@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily revenue sync after the Europe/Paris business cutoff
+
+[Timer]
+OnCalendar=*-*-* 06:15:00 Europe/Paris
+Persistent=true
+Unit=square-combo-sync.service
+
+[Install]
+WantedBy=timers.target

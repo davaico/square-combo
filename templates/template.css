@@ -1,0 +1,16 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 1rem/1.6 system-ui, sans-serif; color: #182428; background: #f7faf8; }
+.container { width: min(100% - 2rem, 38rem); margin: 8vh auto; padding: 2rem; background: white; border: 1px solid #ced9d2; border-radius: .75rem; }
+h1 { font-size: 2rem; line-height: 1.15; }
+h2 { font-size: 1.25rem; }
+.brand { font-weight: 700; letter-spacing: .02em; }
+.brand span { margin: 0 1rem; color: #47765c; }
+section { border-top: 1px solid #ced9d2; padding-top: 1rem; margin-bottom: 1.5rem; }
+label { display: block; font-weight: 600; }
+input, button { width: 100%; font: inherit; padding: .75rem; border: 1px solid #75897e; border-radius: .3rem; margin: .4rem 0; }
+button, .connect { color: white; background: #234c35; cursor: pointer; }
+.connect { display: inline-block; padding: .75rem 1rem; border-radius: .3rem; text-decoration: none; }
+:focus-visible { outline: 3px solid #6c4ef5; outline-offset: 3px; }
+.success { border-left: 3px solid #234c35; padding-left: 1rem; }
+.note { font-size: .875rem; color: #516359; }
+@media (max-width: 480px) { .container { margin: 1rem auto; padding: 1.25rem; } }

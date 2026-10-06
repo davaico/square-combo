@@ -1,0 +1,3 @@
+"""
+Adapter unit tests package.
+"""

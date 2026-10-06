@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Square → Combo</title>
+    <link rel="stylesheet" href="/static/template.css">
+</head>
+<body>
+<main class="container">
+    <p class="brand">Square <span aria-label="to">→</span> Combo</p>
+    <h1>Connect your accounts</h1>
+    <p>Send daily revenue from Square to Combo after each business day closes.</p>
+    {% if status == 'connected' %}
+    <p role="status" class="success">Accounts connected. Your administrator can verify location mappings and schedule the daily sync.</p>
+    {% elif status == 'invalid-key' %}
+    <p role="alert">Combo could not validate that key or find a location. Check the key and try again.</p>
+    {% endif %}
+    {% if client %}
+    <section>
+        <h2>Connect Combo</h2>
+        <p>Square account: <strong>{{ client.name }}</strong></p>
+        <form method="post" action="/combo">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="api_key">Combo API key</label>
+            <input id="api_key" type="password" name="api_key" autocomplete="off" maxlength="4096" required>
+            <button type="submit">Connect Combo</button>
+        </form>
+    </section>
+    {% endif %}
+    <a class="connect" href="/auth/square">{% if client %}Choose a different Square account{% else %}Connect or reconnect Square{% endif %}</a>
+    <p class="note">Ask your Combo account administrator for an API key. A connected Square account keeps its existing Combo destination when you reconnect.</p>
+</main>
+</body>
+</html>
